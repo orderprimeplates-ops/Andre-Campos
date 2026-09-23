@@ -256,7 +256,8 @@ export function buildShoppingList(menu: MenuInput | null | undefined, guestCount
     const ing = line.ingredient;
     const yieldFrac = clamp(ing.yieldPct, 1, 100) / 100;
     line.purchaseQty = line.neededQty / yieldFrac;
-    const loose = line.soldByUnit && dimensionOf(ing.packageUnit) !== "count";
+    const dim = dimensionOf(ing.packageUnit);
+    const loose = line.soldByUnit && (dim === "mass" || dim === "volume");
     if (loose) {
       // Sold by weight/volume at the counter: buy what you need, rounded up to a sensible increment.
       line.packages = Math.max(0.25, Math.ceil(line.purchaseQty * 4 - 1e-9) / 4);

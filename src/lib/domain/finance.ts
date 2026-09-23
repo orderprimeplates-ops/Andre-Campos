@@ -34,9 +34,10 @@ export function projectedLabor(assignments: AssignmentInput[]): number {
   return assignments.reduce((sum, a) => sum + assignmentCost(a), 0);
 }
 
+/** Only work that actually happened counts: completed or paid shifts, or an entered actual pay. */
 export function actualLabor(assignments: AssignmentInput[]): number {
   return assignments
-    .filter((a) => a.staffMemberId && a.status !== "NEEDED")
+    .filter((a) => a.staffMemberId && (a.status === "COMPLETED" || a.status === "PAID" || a.actualPayCents != null))
     .reduce((sum, a) => sum + (a.actualPayCents ?? assignmentCost(a)), 0);
 }
 

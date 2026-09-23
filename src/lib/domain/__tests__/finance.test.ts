@@ -109,3 +109,14 @@ describe("payments", () => {
     expect(s.balanceCents).toBe(0);
   });
 });
+
+describe("actual labor", () => {
+  it("counts only completed, paid, or explicitly paid shifts", () => {
+    const shift = { rateCents: 3000, rateType: "HOURLY" as const, callTime: "16:00", endTime: "21:00", staffMemberId: "s" };
+    const r = actualEvent({
+      collectedCents: 0, guestCount: 1, actualExpenses: [], shoppingActualCents: 0, platform: null,
+      assignments: [{ ...shift, status: "CONFIRMED" }, { ...shift, status: "COMPLETED" }, { ...shift, status: "INVITED", actualPayCents: 5000 }],
+    });
+    expect(r.totalCostCents).toBe(15000 + 5000);
+  });
+});
