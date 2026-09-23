@@ -63,7 +63,8 @@ shallots," "the actual price was $14.80," "this prep task is done."
 - **Every data read/write runs on the server** behind the session check, so the browser only receives what's displayed.
 - **Users have roles** (`OWNER`, `MANAGER`, `STAFF`). V1 is just you, but roles are in place now
   so a Staff Portal or a sous chef login can be added later without restructuring.
-- Input from forms is validated with **Zod** before it's saved.
+- Every form is validated on the server before it's saved (required fields, numbers, dates,
+  allowed values), and every server action re-checks the login — not just the pages.
 
 ---
 
@@ -89,7 +90,7 @@ Lead ──(convert)──► Client ──< Event >── Platform (Direct, Air
                        │          ├──< EventExpense        (projected & actual costs)
                        │          ├──  EventReview         (post-event notes)
                        │          └──< Attachment          (photos — storage wired later)
-                       └──< ClientAddress
+                       └──< Venue                (the client's own addresses, with kitchen checklist)
 CalendarEntry  (custom entries & future external-calendar sync)
 BusinessSettings (target margin, minimum margin, mileage rate…)
 User / Session (login)
@@ -106,7 +107,7 @@ User / Session (login)
 4. **Shopping lists are computed, not stored.** Only your shopping *actions* are saved.
 5. **Prep tasks are generated, then owned by you.** The app drafts a prep plan from recipe
    prep notes; after that the tasks are yours to reorder, assign and edit. If the menu changes,
-   "Regenerate" adds tasks for the new dishes without wiping your edits.
+   "Add missing from menu" adds tasks for the new dishes without wiping your edits.
 6. **Menu items can have their own guest count.** For example, 3 vegetarian guests get the mushroom
    entrée while 9 get the steak. Passed appetizers can be "2 pieces per guest".
 7. **Recipe ingredients know how they scale.** Each ingredient line is *Linear* (doubles when
@@ -115,6 +116,12 @@ User / Session (login)
 8. **Platforms are editable records**, not hard-coded percentages. If GigSalad changes its fees,
    you update one number.
 9. **Everything has `createdAt`/`updatedAt`**, which future analytics and the AI assistant will use.
+10. **Pantry staples** (salt, oils, flour…) count toward food cost but appear as "check the pantry"
+    instead of "buy a 25 lb bag" on shopping lists.
+11. **Recipe quantities are "as used" (after trimming).** An ingredient's usable-yield % converts that
+    into how much to buy — e.g. 3 lb trimmed tenderloin at 72% yield → buy 4¼ lb.
+12. **Actual labor only counts shifts marked Completed or Paid** (or with an actual pay entered), so
+    projected vs actual never double-counts work that hasn't happened.
 
 ---
 
@@ -221,6 +228,10 @@ Each stage leaves the app working.
 ---
 
 ## 10. Decisions for you (the owner)
+
+0. **Your own time.** "Profit" today is what's left *before* paying yourself as chef. If you'd rather
+   see profit after a chef fee, we can add an "owner hourly rate" to Settings and include your hours
+   as a cost on every event. Recommended once you've used the numbers for a few weeks.
 
 1. **Hosting.** Recommended: Vercel + Neon. When you're ready I'll prepare step-by-step instructions; setup takes about 20 minutes.
 2. **Photo storage.** Kitchen and event photos need a file storage service (Vercel Blob or Supabase

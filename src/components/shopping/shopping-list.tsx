@@ -199,7 +199,7 @@ function Row({ r, shop, onToggle, onMore, showStore, pantry }: { r: ShopRow; sho
           {r.status === "SUBSTITUTED" && <Repeat className={shop ? "h-4 w-4" : "h-3 w-3"} />}
         </span>
         <span className="min-w-0 flex-1">
-          <span className={cn("block truncate font-medium transition-colors", shop ? "text-[1.0625rem]" : "text-[0.9375rem]", done ? "text-ink-4 line-through decoration-ink-4/50" : "text-ink")}>{r.name}</span>
+          <span className={cn("block font-medium transition-colors", shop ? "text-[1.0625rem] leading-snug" : "truncate text-[0.9375rem]", done ? "text-ink-4 line-through decoration-ink-4/50" : "text-ink")}>{r.name}</span>
           <span className="block truncate text-xs text-ink-3">
             {pantry ? `uses ${r.need ?? "a little"}` : r.need && r.need !== r.buy ? `need ${r.need}` : null}
             {!pantry && r.usedIn.length > 0 && !shop && <>{r.need && r.need !== r.buy ? " · " : ""}{r.usedIn.slice(0, 2).join(", ")}{r.usedIn.length > 2 ? ` +${r.usedIn.length - 2}` : ""}</>}
@@ -211,7 +211,7 @@ function Row({ r, shop, onToggle, onMore, showStore, pantry }: { r: ShopRow; sho
           {r.scalingNotes.length > 0 && !shop && <span className="mt-0.5 block text-[0.6875rem] italic text-ink-3">{r.scalingNotes[0]}</span>}
         </span>
         {!pantry && (
-          <span className={cn("shrink-0 text-right tabular", shop ? "text-[0.9375rem] font-semibold text-ink" : "text-sm font-medium text-ink-2", done && "text-ink-4")}>
+          <span className={cn("shrink-0 text-right tabular", shop ? "max-w-[40%] text-[0.9375rem] font-semibold text-ink" : "text-sm font-medium text-ink-2", done && "text-ink-4")}>
             {r.buy}
             {r.actualPriceCents != null ? <span className="block text-xs font-normal text-sage">{formatMoney(r.actualPriceCents)}</span> : !shop && r.estimatedCents ? <span className="block text-xs font-normal text-ink-4">~{formatMoney(r.estimatedCents)}</span> : null}
           </span>

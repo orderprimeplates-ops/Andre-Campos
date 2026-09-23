@@ -7,6 +7,24 @@ equipment, day-of execution and profitability in one place.
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full plan: stack, data model,
 how information flows, design system and future roadmap.
 
+## What's in Version 1
+
+| Area | What it does |
+|---|---|
+| **Dashboard** | Greeting, snapshot (upcoming revenue, outstanding balances, events, leads), *Needs Attention*, month calendar, upcoming events with readiness |
+| **Calendar** | Month / week / agenda views of events, deadlines, shopping and prep days, plus your own entries |
+| **Leads** | Drag-and-drop pipeline, follow-up nudges, lost reasons, one-click conversion to client + event |
+| **Clients** | Profiles with allergies, preferences, addresses, lifetime spend and a relationship timeline |
+| **Event Workspace** | Overview · Menu · Guests & Dietary · Venue & Kitchen · Staff · Shopping · Prep · Equipment · Financials · Notes & Review |
+| **Menu Builder** | Course templates, drag-to-reorder, dish picker, custom dishes, per-dish guest counts, allergy cross-check, client-facing menu card |
+| **Dish Library / Recipes / Ingredients** | Dishes built from recipes, recipes built from priced ingredients; recipe scaler with partial/fixed scaling and manual overrides |
+| **Shopping** | Auto-generated, combined, unit-converted lists grouped by aisle or store; phone Shopping Mode; pantry staples; actual prices |
+| **Prep** | Prep plans drafted from recipes, grouped by day, reorderable and assignable; cross-event prep view |
+| **Day-of Mode** | Full-screen phone view: clock, now/next, fire times, tap-to-check timeline, timers, team, venue access |
+| **Staff & Equipment** | Roster, assignments, pay tracking, double-booking warnings; inventory, packing stages, shortage warnings |
+| **Financials** | Price tester with live margin, recommended/minimum price, platform fees & net-target pricing, projected vs actual, financial dashboard |
+| **Search** | ⌘K / search icon — clients, events (including dates like “Oct 3”), dishes, recipes, ingredients, staff, venues, leads |
+
 ## Running it locally
 
 Requirements: Node 20+ and PostgreSQL 14+.
@@ -32,6 +50,7 @@ Sign in with the `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` from your `.env`.
 | `npm run db:migrate` | Apply database changes during development |
 | `npm run db:deploy` | Apply database changes in production |
 | `npm run db:reset` | Rebuild the database from scratch and reseed |
+| `npx tsx scripts/check-costs.mts` | Print every event's food cost, margin and a sample shopping list (sanity check) |
 
 ## Project layout
 
