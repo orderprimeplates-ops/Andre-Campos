@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/server/auth";
+import { db } from "@/lib/server/db";
 import { BrandMark } from "@/components/shell/brand";
 import { LoginForm } from "./login-form";
 
@@ -7,6 +8,8 @@ export const metadata = { title: "Sign in" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   if (await getCurrentUser()) redirect("/");
+  // Brand-new install with no accounts yet: go to first-run setup.
+  if ((await db.user.count()) === 0) redirect("/setup");
   const { next } = await searchParams;
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFormAction } from "./use-form-action";
 import { Dialog } from "./dialog";
 import { FormError } from "./field";
 import { SubmitButton } from "./submit-button";
@@ -86,7 +87,7 @@ export function ActionForm({
   className?: string;
   resetOnSuccess?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
+  const { state, pending, onSubmit } = useFormAction(action);
   const formRef = useRef<HTMLFormElement>(null);
   const handled = useRef<State>(undefined);
   useEffect(() => {
@@ -98,7 +99,7 @@ export function ActionForm({
   }, [state, onSuccess, resetOnSuccess]);
 
   return (
-    <form ref={formRef} action={formAction} className={className ?? "space-y-4"}>
+    <form ref={formRef} onSubmit={onSubmit} className={className ?? "space-y-4"}>
       {hidden && Object.entries(hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       {children}
       <FormError message={state?.error} />
@@ -109,7 +110,7 @@ export function ActionForm({
             Cancel
           </Button>
         )}
-        <SubmitButton pendingLabel="Saving…">{submitLabel}</SubmitButton>
+        <SubmitButton pending={pending} pendingLabel="Saving…">{submitLabel}</SubmitButton>
       </div>
     </form>
   );

@@ -25,6 +25,11 @@ how information flows, design system and future roadmap.
 | **Financials** | Price tester with live margin, recommended/minimum price, platform fees & net-target pricing, projected vs actual, financial dashboard |
 | **Search** | ⌘K / search icon — clients, events (including dates like “Oct 3”), dishes, recipes, ingredients, staff, venues, leads |
 
+## Putting it online
+
+Step-by-step, no coding needed: **[docs/DEPLOYING.md](docs/DEPLOYING.md)**. The first visit to a
+brand-new install shows a one-time setup page where you create the owner account.
+
 ## Running it locally
 
 Requirements: Node 20+ and PostgreSQL 14+.

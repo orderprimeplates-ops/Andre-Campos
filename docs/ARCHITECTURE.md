@@ -42,7 +42,7 @@ shallots," "the actual price was $14.80," "this prep task is done."
 ### Hosting (recommendation, not yet done)
 
 - **Vercel** for the app plus **Neon** or **Supabase** for the PostgreSQL database.
-- Expected cost at your size: roughly $0–$45/month.
+- Expected cost at your size: about $20/month (Vercel Pro — the free plan is for non-commercial use; Neon's free database tier is enough to start). See `docs/DEPLOYING.md`.
 - You get automatic HTTPS and daily database backups, and you only need your iPhone and a browser to use it.
 
 ### What I deliberately did *not* choose

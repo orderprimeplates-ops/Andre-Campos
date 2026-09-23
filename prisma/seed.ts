@@ -27,6 +27,7 @@ import { addDays, fromISODate, todayIn } from "../src/lib/domain/dates";
 import { menuRequirements } from "../src/lib/domain/culinary";
 import { draftPrepTasks, draftRunOfShow } from "../src/lib/domain/planning";
 import { menuInclude, toMenuInput, toRecipeInput } from "../src/lib/mappers";
+import { DEFAULT_PLATFORMS, DEFAULT_VENDORS } from "../src/lib/starter-data";
 
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
 
@@ -65,20 +66,14 @@ async function main() {
   await db.businessSettings.create({ data: { id: 1, ownerName: "Andre", timezone: TZ } });
 
   // ─── Vendors & platforms ─────────────────────────────────────────────────
-  const vendorNames = ["Restaurant Depot", "Costco", "Sam's Club", "Publix", "Whole Foods", "Trader Joe's", "Casablanca Seafood", "Other"];
+  // Standard stores plus the fictional seafood supplier used by the sample recipes.
+  const vendorNames = [...DEFAULT_VENDORS.filter((v) => v !== "Other"), "Casablanca Seafood", "Other"];
   const vendors: Record<string, string> = {};
   for (const [i, name] of vendorNames.entries()) {
     vendors[name] = (await db.vendor.create({ data: { name, sortOrder: i } })).id;
   }
 
-  const platformData = [
-    { name: "Direct", isDirect: true, commissionPct: 0, fixedFeeCents: 0, processingPct: 2.9, processingFixedCents: 30, notes: "Card payments via your processor. Update if you use a different rate." },
-    { name: "Airbnb Experiences", commissionPct: 20, fixedFeeCents: 0, processingPct: 0, processingFixedCents: 0, notes: "Placeholder rate — verify your current host fee." },
-    { name: "GigSalad", commissionPct: 5, fixedFeeCents: 0, processingPct: 3, processingFixedCents: 0, notes: "Placeholder rate — verify your membership tier." },
-    { name: "Yhangry", commissionPct: 15, fixedFeeCents: 0, processingPct: 0, processingFixedCents: 0, notes: "Placeholder rate — verify." },
-    { name: "Thumbtack", commissionPct: 0, fixedFeeCents: 4500, processingPct: 2.9, processingFixedCents: 30, notes: "Pay-per-lead; lead cost entered as a fixed fee. Placeholder." },
-    { name: "The Bash", commissionPct: 5, fixedFeeCents: 0, processingPct: 2.9, processingFixedCents: 30, notes: "Placeholder rate — verify." },
-  ];
+  const platformData = DEFAULT_PLATFORMS;
   const platforms: Record<string, string> = {};
   for (const [i, p] of platformData.entries()) {
     platforms[p.name] = (await db.platform.create({ data: { ...p, sortOrder: i } })).id;
