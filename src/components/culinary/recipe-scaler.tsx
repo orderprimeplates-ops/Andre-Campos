@@ -129,7 +129,7 @@ export function RecipeScaler({
                     {ov !== undefined ? (
                       <div className="flex items-center justify-end gap-1">
                         <input value={ov} onChange={(e) => setOverrides((o) => ({ ...o, [l.id]: e.target.value }))} className="h-8 w-32 rounded-lg border border-champagne/60 bg-champagne-soft/40 px-2 text-right text-sm focus:outline-none" aria-label="Manual quantity" />
-                        <button type="button" onClick={() => setOverrides(({ [l.id]: _, ...rest }) => rest)} className="rounded p-1 text-ink-4 hover:text-ink" aria-label="Reset to calculated"><RotateCcw className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={() => setOverrides((o) => Object.fromEntries(Object.entries(o).filter(([k]) => k !== l.id)))} className="rounded p-1 text-ink-4 hover:text-ink" aria-label="Reset to calculated"><RotateCcw className="h-3.5 w-3.5" /></button>
                       </div>
                     ) : (
                       <button type="button" onClick={() => setOverrides((o) => ({ ...o, [l.id]: formatQuantity(q, l.unit) }))} title="Tap to override by hand" className="font-display text-lg tabular text-ink hover:text-wine">
