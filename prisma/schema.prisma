@@ -1,0 +1,933 @@
+// Prime Plates HQ — database schema
+//
+// Conventions
+// - Money is stored in integer cents (`...Cents`) to avoid rounding errors.
+// - Calendar dates without a time of day use @db.Date; times of day are "HH:mm" strings in the
+//   business timezone (BusinessSettings.timezone). This keeps a 7:00 PM dinner at 7:00 PM
+//   regardless of server location.
+// - Computed information (shopping lists, food cost, margins, alerts) is NOT stored. It is
+//   derived from these records by src/lib/domain. Only human decisions are stored.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Access
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole  @default(OWNER)
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model BusinessSettings {
+  id                 Int      @id @default(1)
+  businessName       String   @default("Prime Plates")
+  ownerName          String   @default("Chef")
+  timezone           String   @default("America/New_York")
+  targetMarginPct    Float    @default(45)
+  minimumMarginPct   Float    @default(35)
+  targetFoodCostPct  Float    @default(28)
+  mileageRateCents   Int      @default(70)
+  defaultDepositPct  Float    @default(50)
+  finalCountLeadDays Int      @default(7)
+  updatedAt          DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sales: platforms, leads, clients
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A booking channel. Fees are editable because platforms change them.
+model Platform {
+  id                   String   @id @default(cuid())
+  name                 String   @unique
+  commissionPct        Float    @default(0)
+  fixedFeeCents        Int      @default(0)
+  processingPct        Float    @default(0)
+  processingFixedCents Int      @default(0)
+  notes                String?
+  isDirect             Boolean  @default(false)
+  active               Boolean  @default(true)
+  sortOrder            Int      @default(0)
+  events               Event[]
+  leads                Lead[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUOTE_SENT
+  FOLLOW_UP
+  NEGOTIATING
+  BOOKED
+  LOST
+}
+
+enum LeadSource {
+  WEBSITE
+  GOOGLE
+  INSTAGRAM
+  TIKTOK
+  REFERRAL
+  PLANNER
+  AIRBNB
+  GIGSALAD
+  THUMBTACK
+  YHANGRY
+  THE_BASH
+  REPEAT_CLIENT
+  OTHER
+}
+
+enum LostReason {
+  PRICE
+  DATE_UNAVAILABLE
+  NO_RESPONSE
+  COMPETITOR
+  BUDGET_MISMATCH
+  OTHER
+}
+
+enum EventType {
+  PRIVATE_DINNER
+  PLATED_DINNER
+  FAMILY_STYLE
+  BUFFET
+  BRUNCH
+  COCKTAIL
+  WEDDING
+  CORPORATE
+  COOKING_CLASS
+  VACATION_CHEF
+  DROP_OFF
+  OTHER
+}
+
+model Lead {
+  id                  String      @id @default(cuid())
+  name                String
+  phone               String?
+  email               String?
+  eventDate           DateTime?   @db.Date
+  location            String?
+  guestCount          Int?
+  eventType           EventType?
+  requestedService    String?
+  budgetCents         Int?
+  cuisineRequest      String?
+  dietaryRestrictions String?
+  source              LeadSource  @default(OTHER)
+  platformId          String?
+  platform            Platform?   @relation(fields: [platformId], references: [id], onDelete: SetNull)
+  notes               String?
+  estimatedValueCents Int?
+  nextFollowUpDate    DateTime?   @db.Date
+  lastContactedAt     DateTime?
+  status              LeadStatus  @default(NEW)
+  boardOrder          Float       @default(0)
+  lostReason          LostReason?
+  lostNotes           String?
+  clientId            String?
+  client              Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  eventId             String?     @unique
+  event               Event?      @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([status])
+  @@index([nextFollowUpDate])
+}
+
+enum ContactMethod {
+  TEXT
+  CALL
+  EMAIL
+  INSTAGRAM
+  WHATSAPP
+}
+
+model Client {
+  id                  String         @id @default(cuid())
+  name                String
+  company             String?
+  phone               String?
+  email               String?
+  preferredContact    ContactMethod?
+  dietaryRestrictions String?
+  allergies           String?
+  likes               String?
+  dislikes            String?
+  importantNotes      String?
+  internalNotes       String?
+  referralSource      LeadSource?
+  referredBy          String?
+  events              Event[]
+  venues              Venue[]
+  leads               Lead[]
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([name])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Venues & kitchens (reusable: cook at the same home twice, checklist is already done)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SpaceLevel {
+  NONE
+  LIMITED
+  MODERATE
+  AMPLE
+}
+
+enum Availability {
+  NONE
+  PARTIAL
+  FULL
+}
+
+model Venue {
+  id                  String        @id @default(cuid())
+  name                String
+  clientId            String?
+  client              Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  address             String?
+  city                String?
+  state               String?
+  postalCode          String?
+  parkingInstructions String?
+  gateCode            String?
+  contactName         String?
+  contactPhone        String?
+  // Kitchen checklist. null = "not yet known", which drives Kitchen Readiness.
+  stoveType           String?
+  burnerCount         Int?
+  hasOven             Boolean?
+  ovenNotes           String?
+  hasGrill            Boolean?
+  hasMicrowave        Boolean?
+  fridgeSpace         SpaceLevel?
+  freezerSpace        SpaceLevel?
+  counterSpace        SpaceLevel?
+  hasSink             Boolean?
+  hasDishwasher       Boolean?
+  cookware            String?
+  sheetPans           String?
+  servingPieces       String?
+  plates              Availability?
+  flatware            Availability?
+  glassware           Availability?
+  electricalNotes     String?
+  outdoorCooking      String?
+  otherNotes          String?
+  events              Event[]
+  attachments         Attachment[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Events
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum EventStatus {
+  INQUIRY
+  TENTATIVE
+  BOOKED
+  PLANNING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum ServiceStyle {
+  PLATED
+  FAMILY_STYLE
+  BUFFET
+  STATIONS
+  PASSED
+  DROP_OFF
+  INTERACTIVE
+}
+
+model Event {
+  id                  String              @id @default(cuid())
+  name                String
+  clientId            String
+  client              Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  venueId             String?
+  venue               Venue?              @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  platformId          String?
+  platform            Platform?           @relation(fields: [platformId], references: [id], onDelete: SetNull)
+  eventType           EventType
+  serviceStyle        ServiceStyle        @default(PLATED)
+  status              EventStatus         @default(BOOKED)
+  date                DateTime            @db.Date
+  endDate             DateTime?           @db.Date // multi-day bookings (vacation chef, weddings)
+  arrivalTime         String?
+  serviceTime         String?
+  endTime             String?
+  guestCount          Int
+  guestCountConfirmed Boolean             @default(false)
+  finalCountDueDate   DateTime?           @db.Date
+  priceCents          Int                 @default(0)
+  depositCents        Int                 @default(0)
+  depositDueDate      DateTime?           @db.Date
+  balanceDueDate      DateTime?           @db.Date
+  shoppingDate        DateTime?           @db.Date
+  prepStartDate       DateTime?           @db.Date
+  roundTripMiles      Float?
+  description         String?
+  dietarySummary      String?
+  criticalNotes       String?
+  internalNotes       String?
+  duplicatedFromId    String?
+  menu                Menu?
+  guestNotes          GuestDietaryNote[]
+  staffAssignments    StaffAssignment[]
+  equipment           EventEquipment[]
+  shoppingStates      ShoppingItemState[]
+  shoppingExtras      ShoppingExtraItem[]
+  prepTasks           PrepTask[]
+  runOfShow           RunOfShowItem[]
+  payments            Payment[]
+  expenses            EventExpense[]
+  review              EventReview?
+  attachments         Attachment[]
+  calendarEntries     CalendarEntry[]
+  lead                Lead?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([date])
+  @@index([clientId])
+  @@index([status])
+}
+
+enum DietarySeverity {
+  PREFERENCE
+  INTOLERANCE
+  ALLERGY
+  SEVERE_ALLERGY
+}
+
+model GuestDietaryNote {
+  id          String          @id @default(cuid())
+  eventId     String
+  event       Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  guestName   String?
+  restriction String
+  severity    DietarySeverity @default(PREFERENCE)
+  count       Int             @default(1)
+  notes       String?
+  createdAt   DateTime        @default(now())
+
+  @@index([eventId])
+}
+
+enum PaymentKind {
+  DEPOSIT
+  BALANCE
+  TIP
+  OTHER
+}
+
+model Payment {
+  id          String      @id @default(cuid())
+  eventId     String
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind        PaymentKind
+  amountCents Int
+  receivedOn  DateTime    @db.Date
+  method      String?
+  notes       String?
+  createdAt   DateTime    @default(now())
+
+  @@index([eventId])
+}
+
+enum ExpenseKind {
+  PROJECTED
+  ACTUAL
+}
+
+enum ExpenseCategory {
+  FOOD
+  BEVERAGE
+  LABOR
+  PREP_LABOR
+  TRAVEL
+  MILEAGE
+  RENTALS
+  EQUIPMENT
+  DISPOSABLES
+  OTHER
+}
+
+model EventExpense {
+  id          String          @id @default(cuid())
+  eventId     String
+  event       Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind        ExpenseKind
+  category    ExpenseCategory
+  description String
+  vendor      String?
+  amountCents Int
+  date        DateTime?       @db.Date
+  notes       String?
+  createdAt   DateTime        @default(now())
+
+  @@index([eventId, kind])
+}
+
+model EventReview {
+  id               String   @id @default(cuid())
+  eventId          String   @unique
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rating           Int?
+  wentWell         String?
+  wentWrong        String?
+  clientLoved      String?
+  changeNextTime   String?
+  ranOut           String?
+  excessLeftovers  String?
+  serveMenuAgain   Boolean?
+  takeClientAgain  Boolean?
+  operationalNotes String?
+  updatedAt        DateTime @updatedAt
+}
+
+/// Files (kitchen photos, plating photos). Storage provider is wired in a later phase;
+/// `url` points to wherever the file lives.
+model Attachment {
+  id        String   @id @default(cuid())
+  url       String
+  caption   String?
+  eventId   String?
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venueId   String?
+  venue     Venue?   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  dishId    String?
+  dish      Dish?    @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+enum CalendarEntryType {
+  SHOPPING
+  PREP
+  DEADLINE
+  TASTING
+  MEETING
+  PERSONAL
+  OTHER
+}
+
+/// Manually added calendar items. Event dates and deadlines are derived from Events.
+/// `source` + `externalId` exist for future Google/iCloud sync.
+model CalendarEntry {
+  id         String            @id @default(cuid())
+  title      String
+  type       CalendarEntryType @default(OTHER)
+  date       DateTime          @db.Date
+  startTime  String?
+  endTime    String?
+  eventId    String?
+  event      Event?            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  notes      String?
+  source     String            @default("manual")
+  externalId String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@index([date])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Culinary: ingredients → recipes → dishes → menus
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum IngredientCategory {
+  PRODUCE
+  MEAT
+  SEAFOOD
+  DAIRY
+  DRY_GOODS
+  BAKERY
+  FROZEN
+  BEVERAGES
+  SPECIALTY
+  DISPOSABLES
+  OTHER
+}
+
+model Vendor {
+  id             String              @id @default(cuid())
+  name           String              @unique
+  notes          String?
+  sortOrder      Int                 @default(0)
+  ingredients    Ingredient[]
+  shoppingStates ShoppingItemState[]
+  shoppingExtras ShoppingExtraItem[]
+  createdAt      DateTime            @default(now())
+}
+
+/// Pricing: one package (e.g. "10 lb case") holds `packageQty` of `packageUnit` and costs
+/// `packagePriceCents`. `yieldPct` accounts for trim/waste (whole fish ≈ 45%).
+/// Cost per usable unit = price ÷ (packageQty × yieldPct).
+model Ingredient {
+  id                String              @id @default(cuid())
+  name              String              @unique
+  category          IngredientCategory  @default(OTHER)
+  purchaseUnit      String // how you buy it: "case", "bunch", "lb", "bottle"
+  packageQty        Float               @default(1)
+  packageUnit       String // unit code for packageQty: lb, oz, g, kg, ml, l, qt, gal, ea…
+  packagePriceCents Int                 @default(0)
+  yieldPct          Float               @default(100)
+  gramsPerMl        Float? // density, lets volume recipes cost weight-priced items
+  gramsPerEach      Float? // lets "2 ea" onions cost a per-lb price
+  isPantryStaple    Boolean              @default(false) // usually on hand: listed as "check pantry", not "buy"
+  preferredVendorId String?
+  preferredVendor   Vendor?             @relation(fields: [preferredVendorId], references: [id], onDelete: SetNull)
+  notes             String?
+  priceUpdatedAt    DateTime            @default(now())
+  recipeLines       RecipeIngredient[]
+  shoppingStates    ShoppingItemState[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
+enum RecipeCategory {
+  SAUCE
+  PROTEIN
+  STARCH
+  VEGETABLE
+  SALAD
+  SOUP
+  DRESSING
+  GARNISH
+  BAKED
+  DESSERT
+  BASE
+  BEVERAGE
+  OTHER
+}
+
+enum PrepPhase {
+  SEVERAL_DAYS
+  TWO_DAYS
+  DAY_BEFORE
+  EVENT_MORNING
+  BEFORE_DEPARTURE
+  ON_SITE
+}
+
+model Recipe {
+  id                    String             @id @default(cuid())
+  name                  String
+  category              RecipeCategory     @default(OTHER)
+  yieldPortions         Float // how many portions one batch makes
+  yieldDescription      String? // "about 1 quart"
+  method                String? // steps, one per line
+  prepMinutes           Int?
+  cookMinutes           Int?
+  equipment             String?
+  allergens             String[]
+  dietaryTags           String[]
+  holdingInstructions   String?
+  reheatingInstructions String?
+  transportNotes        String?
+  platingInstructions   String?
+  chefNotes             String?
+  defaultPrepPhase      PrepPhase          @default(DAY_BEFORE)
+  ingredients           RecipeIngredient[]
+  dishComponents        DishComponent[]
+  prepTasks             PrepTask[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([name])
+}
+
+enum ScalingMode {
+  LINEAR // doubles when the recipe doubles
+  FIXED // stays the same (1 bay leaf)
+  PARTIAL // scales at `scalingFactor` of the linear rate (salt, spice, frying oil)
+}
+
+model RecipeIngredient {
+  id            String      @id @default(cuid())
+  recipeId      String
+  recipe        Recipe      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientId  String
+  ingredient    Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity      Float
+  unit          String
+  prepNote      String?
+  scalingMode   ScalingMode @default(LINEAR)
+  scalingFactor Float       @default(1)
+  scalingNote   String?
+  sortOrder     Int         @default(0)
+
+  @@index([recipeId])
+  @@index([ingredientId])
+}
+
+enum Course {
+  WELCOME_BITE
+  PASSED_APPETIZER
+  APPETIZER
+  SOUP
+  SALAD
+  ENTREE
+  SIDE
+  DESSERT
+  LATE_NIGHT
+  BEVERAGE
+}
+
+enum Level {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum HoldingQuality {
+  POOR
+  FAIR
+  GOOD
+  EXCELLENT
+}
+
+/// The finished item the guest experiences. Built from one or more Recipes.
+model Dish {
+  id                String          @id @default(cuid())
+  name              String
+  description       String? // client-facing
+  course            Course
+  cuisine           String?
+  protein           String?
+  dietaryTags       String[]
+  allergens         String[]
+  serviceStyles     ServiceStyle[]
+  difficulty        Level           @default(MEDIUM)
+  prepIntensity     Level           @default(MEDIUM)
+  platingDifficulty Level           @default(MEDIUM)
+  holdingQuality    HoldingQuality  @default(GOOD)
+  chefNotes         String?
+  photoUrl          String?
+  inLibrary         Boolean         @default(true) // false = one-off custom dish for a single menu
+  archived          Boolean         @default(false)
+  components        DishComponent[]
+  menuItems         MenuItem[]
+  prepTasks         PrepTask[]
+  attachments       Attachment[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([name])
+}
+
+model DishComponent {
+  id                 String  @id @default(cuid())
+  dishId             String
+  dish               Dish    @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  recipeId           String
+  recipe             Recipe  @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  portionsPerServing Float   @default(1)
+  notes              String?
+  sortOrder          Int     @default(0)
+
+  @@index([dishId])
+}
+
+enum MenuStatus {
+  DRAFT
+  SENT
+  APPROVED
+}
+
+model Menu {
+  id          String       @id @default(cuid())
+  eventId     String       @unique
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status      MenuStatus   @default(DRAFT)
+  title       String?
+  clientNotes String?
+  sentAt      DateTime?
+  approvedAt  DateTime?
+  courses     MenuCourse[]
+  updatedAt   DateTime     @updatedAt
+}
+
+model MenuCourse {
+  id        String     @id @default(cuid())
+  menuId    String
+  menu      Menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  name      String
+  fireTime  String? // "HH:mm" — feeds Day-of Event Mode
+  sortOrder Int        @default(0)
+  items     MenuItem[]
+
+  @@index([menuId])
+}
+
+model MenuItem {
+  id               String     @id @default(cuid())
+  courseId         String
+  course           MenuCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  dishId           String
+  dish             Dish       @relation(fields: [dishId], references: [id], onDelete: Restrict)
+  guestCount       Int? // override: e.g. 3 vegetarian entrées; null = event guest count
+  portionsPerGuest Float      @default(1) // e.g. 2 passed canapés per guest
+  notes            String?
+  sortOrder        Int        @default(0)
+
+  @@index([courseId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Operations: shopping, prep, day-of
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ShoppingStatus {
+  PENDING
+  PURCHASED
+  NOT_FOUND
+  SUBSTITUTED
+}
+
+/// Your actions on a computed shopping line (the line itself is derived from the menu).
+model ShoppingItemState {
+  id               String         @id @default(cuid())
+  eventId          String
+  event            Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ingredientId     String
+  ingredient       Ingredient     @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  status           ShoppingStatus @default(PENDING)
+  quantityOverride Float? // in the ingredient's packageUnit
+  actualPriceCents Int?
+  substitution     String?
+  vendorId         String?
+  vendor           Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  notes            String?
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([eventId, ingredientId])
+}
+
+/// Items not derived from recipes: ice, disposables, flowers, client-requested extras.
+model ShoppingExtraItem {
+  id               String             @id @default(cuid())
+  eventId          String
+  event            Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name             String
+  category         IngredientCategory @default(OTHER)
+  quantity         String?
+  vendorId         String?
+  vendor           Vendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  status           ShoppingStatus     @default(PENDING)
+  estimatedCents   Int?
+  actualPriceCents Int?
+  notes            String?
+  createdAt        DateTime           @default(now())
+
+  @@index([eventId])
+}
+
+enum PrepStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+}
+
+model PrepTask {
+  id               String       @id @default(cuid())
+  eventId          String
+  event            Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title            String
+  phase            PrepPhase
+  recipeId         String?
+  recipe           Recipe?      @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  dishId           String?
+  dish             Dish?        @relation(fields: [dishId], references: [id], onDelete: SetNull)
+  estimatedMinutes Int?
+  assigneeId       String?
+  assignee         StaffMember? @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  status           PrepStatus   @default(NOT_STARTED)
+  notes            String?
+  sortOrder        Int          @default(0)
+  generated        Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([eventId, phase])
+}
+
+enum RunOfShowKind {
+  ARRIVAL
+  TASK
+  FIRE
+  SERVICE
+  BREAKDOWN
+  DEPARTURE
+}
+
+/// The Day-of timeline. `details` holds one checklist line per row.
+model RunOfShowItem {
+  id        String        @id @default(cuid())
+  eventId   String
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  time      String // "HH:mm"
+  title     String
+  kind      RunOfShowKind @default(TASK)
+  details   String?
+  doneLines Int[] // indexes of checked detail lines
+  done      Boolean       @default(false)
+  sortOrder Int           @default(0)
+  createdAt DateTime      @default(now())
+
+  @@index([eventId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Team & equipment
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum StaffRole {
+  CHEF
+  SOUS_CHEF
+  KITCHEN_ASSISTANT
+  SERVER
+  BARTENDER
+  CAPTAIN
+  DISHWASHER
+  OTHER
+}
+
+enum RateType {
+  HOURLY
+  FLAT
+}
+
+model StaffMember {
+  id                String            @id @default(cuid())
+  name              String
+  phone             String?
+  email             String?
+  role              StaffRole
+  rateCents         Int               @default(0)
+  rateType          RateType          @default(HOURLY)
+  notes             String?
+  availabilityNotes String?
+  reliabilityNotes  String?
+  active            Boolean           @default(true)
+  assignments       StaffAssignment[]
+  prepTasks         PrepTask[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+enum AssignmentStatus {
+  NEEDED
+  INVITED
+  CONFIRMED
+  COMPLETED
+  PAID
+}
+
+model StaffAssignment {
+  id               String           @id @default(cuid())
+  eventId          String
+  event            Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  staffMemberId    String? // null = role still needs to be filled
+  staffMember      StaffMember?     @relation(fields: [staffMemberId], references: [id], onDelete: SetNull)
+  role             StaffRole
+  rateCents        Int              @default(0)
+  rateType         RateType         @default(HOURLY)
+  callTime         String?
+  endTime          String?
+  status           AssignmentStatus @default(NEEDED)
+  responsibilities String?
+  actualPayCents   Int?
+  paidOn           DateTime?        @db.Date
+  sortOrder        Int              @default(0)
+  createdAt        DateTime         @default(now())
+
+  @@index([eventId])
+  @@index([staffMemberId])
+}
+
+enum EquipmentCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  NEEDS_REPAIR
+}
+
+model EquipmentItem {
+  id                   String             @id @default(cuid())
+  name                 String             @unique
+  category             String             @default("General")
+  quantityOwned        Int                @default(1)
+  quantityOutOfService Int                @default(0)
+  storageLocation      String?
+  condition            EquipmentCondition @default(GOOD)
+  notes                String?
+  eventUses            EventEquipment[]
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+enum PackStatus {
+  REQUIRED
+  PACKED
+  LOADED
+  ON_SITE
+  RETURNED
+}
+
+model EventEquipment {
+  id              String        @id @default(cuid())
+  eventId         String
+  event           Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  equipmentItemId String
+  equipmentItem   EquipmentItem @relation(fields: [equipmentItemId], references: [id], onDelete: Restrict)
+  quantity        Int           @default(1)
+  status          PackStatus    @default(REQUIRED)
+  notes           String?
+
+  @@unique([eventId, equipmentItemId])
+}

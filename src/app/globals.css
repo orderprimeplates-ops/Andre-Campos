@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Prime Plates HQ — design tokens
+ * A well-set table: ivory linen, espresso ink, a single restrained wine accent.
+ * Status colours are muted (sage, amber, clay, slate) so busy days still feel calm.
+ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-ivory: #f7f3ec;
+  --color-linen: #fffdf9;
+  --color-sand: #f1ebe1;
+  --color-parchment: #ebe3d6;
+  --color-line: #e6ddcf;
+  --color-line-strong: #d6cab8;
+
+  --color-ink: #2a211d;
+  --color-ink-2: #5e534b;
+  --color-ink-3: #8f8277;
+  --color-ink-4: #b5a99d;
+
+  --color-espresso: #3a2c26;
+  --color-wine: #7a2e3a;
+  --color-wine-deep: #5e1f2b;
+  --color-wine-soft: #f4e8e7;
+  --color-champagne: #b8955a;
+  --color-champagne-soft: #f5eddd;
+
+  --color-sage: #56704f;
+  --color-sage-soft: #e8eee3;
+  --color-amber: #a8701f;
+  --color-amber-soft: #f7ecd9;
+  --color-clay: #a4442e;
+  --color-clay-soft: #f6e4dc;
+  --color-slate: #4d6173;
+  --color-slate-soft: #e6ecf1;
+  --color-ocean: #3b6b6e;
+  --color-ocean-soft: #e2eeed;
+  --color-plum: #6d4c6f;
+  --color-plum-soft: #efe6ef;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(58 44 38 / 0.04), 0 4px 16px -6px rgb(58 44 38 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(58 44 38 / 0.05), 0 12px 32px -12px rgb(58 44 38 / 0.18);
+  --shadow-pop: 0 8px 24px -6px rgb(42 33 29 / 0.18), 0 24px 64px -24px rgb(42 33 29 / 0.28);
+
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-fade-up: fade-up 0.45s var(--ease-soft) both;
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-sheet-up: sheet-up 0.32s var(--ease-soft) both;
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes sheet-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 }
 
+:root {
+  color-scheme: light;
+}
+
+html {
+  background: var(--color-ivory);
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ivory);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-wine-soft);
+  color: var(--color-wine-deep);
+}
+
+@layer base {
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-wine) 55%, transparent);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .hairline {
+    border-color: var(--color-line);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
 }

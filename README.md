@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Prime Plates HQ
 
-## Getting Started
+The internal operating system for **Prime Plates** — private chef & catering.
+Inquiries, clients, events, menus, recipes, food costing, shopping, prep, staffing,
+equipment, day-of execution and profitability in one place.
 
-First, run the development server:
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full plan: stack, data model,
+how information flows, design system and future roadmap.
+
+## Running it locally
+
+Requirements: Node 20+ and PostgreSQL 14+.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env          # then set DATABASE_URL and your owner login
+npm run db:migrate            # create the database tables
+npm run db:seed               # load realistic sample data (wipes business data!)
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sign in with the `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` from your `.env`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Useful commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start the app in development mode |
+| `npm test` | Run the automated tests for costing, scaling, fees, margins and alerts |
+| `npm run typecheck` | Check the code for type errors |
+| `npm run lint` | Check code style |
+| `npm run db:migrate` | Apply database changes during development |
+| `npm run db:deploy` | Apply database changes in production |
+| `npm run db:reset` | Rebuild the database from scratch and reseed |
 
-## Learn More
+## Project layout
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+prisma/schema.prisma     The database: every table and relationship
+prisma/seed.ts           Realistic sample data
+src/lib/domain/          The engine — scaling, costing, shopping, profit, fees, alerts (pure, tested)
+src/lib/server/          Database access, auth, page data loaders (server-only)
+src/app/(app)/           Pages behind login
+src/components/          Design system (ui/) and feature components
+```
