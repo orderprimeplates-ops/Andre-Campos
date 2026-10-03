@@ -209,29 +209,68 @@ export function priceForMargin(fixedCostCents: number, marginPct: number, platfo
 
 export interface ActualInput {
   collectedCents: number; // payments received, excluding tips
+  /** The booked client price. Event revenue is the larger of this and what was collected. */
+  priceCents?: number;
   guestCount: number;
   actualExpenses: ExpenseInput[];
   /** Sum of actual prices entered in shopping mode, used when no FOOD receipts are entered. */
   shoppingActualCents: number;
+  /** Food cost calculated from the menu — used only when no actual food cost exists at all. */
+  estimatedFoodCents?: number;
   assignments: AssignmentInput[];
   platform?: PlatformFees | null;
 }
 
-export function actualEvent(input: ActualInput): ProfitSummary & { foodSource: "receipts" | "shopping" | "none" } {
+export type LaborSource = "actual" | "projected" | "none";
+export type FoodSource = "receipts" | "shopping" | "estimate" | "none";
+
+/**
+ * Final event profitability:
+ *   Event revenue − food − labor − rentals/supplies − other expenses − platform fees = net profit.
+ * Food uses, in order: quick food cost / receipts (FOOD lines), Shopping-mode prices, then the
+ * menu estimate — never more than one of them, so food is never double-counted.
+ */
+export function actualEvent(input: ActualInput): ProfitSummary & {
+  foodSource: FoodSource;
+  actualFoodCents: number | null;
+  laborSource: LaborSource;
+  revenueBasis: "collected" | "booked";
+} {
   const costs = new Map<CostCategory, number>();
   const foodReceipts = input.actualExpenses.filter((e) => e.category === "FOOD");
-  let foodSource: "receipts" | "shopping" | "none" = "none";
-  if (foodReceipts.length) foodSource = "receipts";
-  else if (input.shoppingActualCents > 0) {
+  let foodSource: FoodSource = "none";
+  let actualFoodCents: number | null = null;
+  if (foodReceipts.length) {
+    foodSource = "receipts";
+    actualFoodCents = foodReceipts.reduce((s, e) => s + e.amountCents, 0);
+  } else if (input.shoppingActualCents > 0) {
     foodSource = "shopping";
+    actualFoodCents = input.shoppingActualCents;
     addCost(costs, "FOOD", input.shoppingActualCents);
+  } else if ((input.estimatedFoodCents ?? 0) > 0) {
+    foodSource = "estimate";
+    addCost(costs, "FOOD", input.estimatedFoodCents!);
   }
   for (const e of input.actualExpenses) addCost(costs, e.category, e.amountCents);
-  addCost(costs, "LABOR", actualLabor(input.assignments));
-  const fees = platformFees(input.collectedCents, input.platform);
+  // Until any shift is marked worked or paid, staff cost is the scheduled cost — never silently $0.
+  const workedLabor = actualLabor(input.assignments);
+  const scheduledLabor = projectedLabor(input.assignments);
+  const laborSource: LaborSource = workedLabor > 0 ? "actual" : scheduledLabor > 0 ? "projected" : "none";
+  addCost(costs, "LABOR", workedLabor > 0 ? workedLabor : scheduledLabor);
+  const price = input.priceCents ?? 0;
+  const revenueBasis = input.collectedCents >= price ? "collected" : "booked";
+  const revenueCents = Math.max(input.collectedCents, price);
+  const fees = platformFees(revenueCents, input.platform);
   addCost(costs, "PLATFORM", fees.commissionCents);
   addCost(costs, "PROCESSING", fees.processingCents);
-  return { ...summarize(input.collectedCents, input.guestCount, costs), foodSource };
+  return { ...summarize(revenueCents, input.guestCount, costs), foodSource, actualFoodCents, laborSource, revenueBasis };
+}
+
+/** Estimated (menu costing) vs actual (what was spent) food cost. Variance > 0 means over estimate. */
+export function foodCostVariance(estimatedCents: number, actualCents: number | null) {
+  if (actualCents === null) return { estimatedCents, actualCents: null, varianceCents: null, variancePct: null };
+  const varianceCents = actualCents - estimatedCents;
+  return { estimatedCents, actualCents, varianceCents, variancePct: estimatedCents > 0 ? (varianceCents / estimatedCents) * 100 : null };
 }
 
 // ─── Payments ───────────────────────────────────────────────────────────────

@@ -3,12 +3,13 @@ import { db } from "@/lib/server/db";
 import { getToday } from "@/lib/server/settings";
 import { toISODate } from "@/lib/domain/dates";
 import { LiveMode } from "@/components/live/live-mode";
+import { loadStaffBriefSource } from "@/lib/server/staff-brief";
 
 export const metadata = { title: "Day-of mode" };
 
 export default async function LivePage({ params }: PageProps<"/events/[id]/live">) {
   const { id } = await params;
-  const [e, { today, timezone }] = await Promise.all([
+  const [e, { today, timezone }, briefSource] = await Promise.all([
     db.event.findUnique({
       where: { id },
       include: {
@@ -22,10 +23,12 @@ export default async function LivePage({ params }: PageProps<"/events/[id]/live"
       },
     }),
     getToday(),
+    loadStaffBriefSource(id),
   ]);
-  if (!e) notFound();
+  if (!e || !briefSource) notFound();
   return (
     <LiveMode
+      briefSource={briefSource}
       data={{
         id: e.id,
         name: e.name,

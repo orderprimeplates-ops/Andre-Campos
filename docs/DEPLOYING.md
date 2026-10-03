@@ -81,7 +81,9 @@ and iPhone. No coding or terminal is needed. Plan on 20–30 minutes.
 3. **Ingredients:** add the ingredients you buy most, with current prices.
 4. **Recipes → Dishes:** build your signature dishes from those recipes.
 5. **Staff** and **Equipment:** add your team and what you own.
-6. Then start using **Leads** and **Events** for real bookings.
+6. **Financials → Historical revenue:** enter what you collected each month this year before
+   using HQ, so your year-to-date numbers are complete.
+7. Then start using **Leads** and **Events** for real bookings.
 
 ---
 

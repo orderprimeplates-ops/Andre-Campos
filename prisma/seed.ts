@@ -47,7 +47,7 @@ async function wipe() {
     db.venue.deleteMany(), db.client.deleteMany(), db.dishComponent.deleteMany(), db.dish.deleteMany(),
     db.recipeIngredient.deleteMany(), db.recipe.deleteMany(), db.ingredient.deleteMany(), db.vendor.deleteMany(),
     db.platform.deleteMany(), db.staffMember.deleteMany(), db.equipmentItem.deleteMany(),
-    db.businessSettings.deleteMany(),
+    db.businessSettings.deleteMany(), db.historicalRevenue.deleteMany(),
   ]);
 }
 

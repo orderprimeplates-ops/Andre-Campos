@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormAction } from "./use-form-action";
 import { Dialog } from "./dialog";
 import { FormError } from "./field";
@@ -27,6 +28,7 @@ export function ActionDialog({
   children,
   wide,
   hidden,
+  successHref,
 }: {
   /** Content of the trigger button (text and/or icon). */
   trigger: React.ReactNode;
@@ -42,7 +44,10 @@ export function ActionDialog({
   children: React.ReactNode;
   wide?: boolean;
   hidden?: Record<string, string>;
+  /** Where to go after a successful save (e.g. the tab that shows the result). */
+  successHref?: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   return (
@@ -60,7 +65,7 @@ export function ActionDialog({
         {trigger}
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title={title} description={description} wide={wide}>
-        <ActionForm key={formKey} action={action} submitLabel={submitLabel} onSuccess={() => setOpen(false)} onCancel={() => setOpen(false)} hidden={hidden}>
+        <ActionForm key={formKey} action={action} submitLabel={submitLabel} onSuccess={() => { setOpen(false); if (successHref) router.push(successHref); }} onCancel={() => setOpen(false)} hidden={hidden}>
           {children}
         </ActionForm>
       </Dialog>

@@ -23,6 +23,9 @@ how information flows, design system and future roadmap.
 | **Day-of Mode** | Full-screen phone view: clock, now/next, fire times, tap-to-check timeline, timers, team, venue access |
 | **Staff & Equipment** | Roster, assignments, pay tracking, double-booking warnings; inventory, packing stages, shortage warnings |
 | **Financials** | Price tester with live margin, recommended/minimum price, platform fees & net-target pricing, projected vs actual, financial dashboard |
+| **Quick Food Cost** | “+ Add Food Cost” on every event: what you spent per store (optional receipt photo) → actual food cost, food cost %, variance vs the menu estimate, net profit |
+| **Historical revenue** | Collected revenue per month from before HQ (Financials → Historical revenue). Counts toward YTD and charts, never toward clients/events; profit estimated at a configurable margin (default 70%) |
+| **Staff Event Brief** | Day-of mode → Share: pick sections, preview, create a branded PDF and send it from the phone’s share sheet. Never includes prices, payments, costs or pay rates |
 | **Search** | ⌘K / search icon — clients, events (including dates like “Oct 3”), dishes, recipes, ingredients, staff, venues, leads |
 
 ## Putting it online

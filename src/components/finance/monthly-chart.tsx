@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { formatMoney, formatMoneyCompact } from "@/lib/domain/money";
 
-export interface MonthPoint { key: string; label: string; revenueCents: number; profitCents: number; events: number }
+export interface MonthPoint { key: string; label: string; revenueCents: number; profitCents: number; events: number; historical?: boolean }
 
 // Validated pair (dataviz validator, light surface #fffdf9): profit + costs.
 const PROFIT = "#9b3f4d";
 const COSTS = "#b88a35";
+// Historical months (entered totals, estimated profit) use the same hues, hatched.
+const hatch = (c: string) => `repeating-linear-gradient(135deg, ${c} 0 5px, color-mix(in srgb, ${c} 55%, #fffdf9) 5px 8px)`;
 
 /** Monthly revenue as stacked bars: profit (bottom) + costs (top) = revenue. One axis. */
 export function MonthlyChart({ data }: { data: MonthPoint[] }) {
@@ -21,16 +23,17 @@ export function MonthlyChart({ data }: { data: MonthPoint[] }) {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-ink-2">
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: PROFIT }} />Projected profit</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: PROFIT }} />Profit</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: COSTS }} />Costs</span>
-        <span className="text-ink-4">Bar height = booked revenue</span>
+        {data.some((d) => d.historical) && <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: hatch(PROFIT) }} />Historical (estimated profit)</span>}
+        <span className="text-ink-4">Bar height = revenue</span>
         <button type="button" onClick={() => setTable((t) => !t)} className="ml-auto text-xs font-medium text-ink-3 hover:text-wine">{table ? "Show chart" : "Show table"}</button>
       </div>
       {table ? (
         <table className="w-full text-sm">
           <thead className="text-xs text-ink-3"><tr className="border-b border-line"><th className="py-2 text-left font-medium">Month</th><th className="py-2 text-right font-medium">Events</th><th className="py-2 text-right font-medium">Revenue</th><th className="py-2 text-right font-medium">Profit</th></tr></thead>
           <tbody className="divide-y divide-line/60">
-            {data.map((d) => <tr key={d.key}><td className="py-2">{d.label}</td><td className="py-2 text-right tabular">{d.events}</td><td className="py-2 text-right tabular">{formatMoney(d.revenueCents)}</td><td className="py-2 text-right tabular">{formatMoney(d.profitCents)}</td></tr>)}
+            {data.map((d) => <tr key={d.key}><td className="py-2">{d.label}{d.historical && <span className="ml-1.5 text-xs text-ink-4">historical</span>}</td><td className="py-2 text-right tabular">{d.events}</td><td className="py-2 text-right tabular">{formatMoney(d.revenueCents)}</td><td className="py-2 text-right tabular">{formatMoney(d.profitCents)}</td></tr>)}
           </tbody>
         </table>
       ) : (
@@ -50,14 +53,14 @@ export function MonthlyChart({ data }: { data: MonthPoint[] }) {
                 return (
                   <div key={d.key} className="relative flex h-full flex-1 flex-col justify-end" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
                     <div className="mx-auto flex w-full max-w-[2.75rem] flex-col justify-end gap-[2px]" style={{ opacity: hover === null || hover === i ? 1 : 0.55 }}>
-                      {costs > 0 && <div style={{ height: costs, background: COSTS }} className="rounded-t-[4px]" />}
-                      {profit > 0 && <div style={{ height: profit, background: PROFIT }} className={costs > 0 ? "" : "rounded-t-[4px]"} />}
+                      {costs > 0 && <div style={{ height: costs, background: d.historical ? hatch(COSTS) : COSTS }} className="rounded-t-[4px]" />}
+                      {profit > 0 && <div style={{ height: profit, background: d.historical ? hatch(PROFIT) : PROFIT }} className={costs > 0 ? "" : "rounded-t-[4px]"} />}
                     </div>
                     {hover === i && (
                       <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-44 -translate-x-1/2 rounded-xl border border-line bg-linen px-3 py-2 text-xs shadow-[var(--shadow-pop)]">
-                        <div className="font-medium text-ink">{d.label} · {d.events} event{d.events === 1 ? "" : "s"}</div>
+                        <div className="font-medium text-ink">{d.label} · {d.historical ? "historical" : `${d.events} event${d.events === 1 ? "" : "s"}`}</div>
                         <div className="mt-1 flex justify-between text-ink-2"><span>Revenue</span><span className="tabular">{formatMoney(d.revenueCents)}</span></div>
-                        <div className="flex justify-between text-ink-2"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{ background: PROFIT }} />Profit</span><span className="tabular">{formatMoney(d.profitCents)}</span></div>
+                        <div className="flex justify-between text-ink-2"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{ background: PROFIT }} />{d.historical ? "Est. profit" : "Profit"}</span><span className="tabular">{formatMoney(d.profitCents)}</span></div>
                         <div className="flex justify-between text-ink-2"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{ background: COSTS }} />Costs</span><span className="tabular">{formatMoney(d.revenueCents - d.profitCents)}</span></div>
                       </div>
                     )}

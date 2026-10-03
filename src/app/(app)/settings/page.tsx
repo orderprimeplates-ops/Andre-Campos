@@ -52,6 +52,7 @@ export default async function SettingsPage() {
                 <Field label="Mileage rate per mile" name="mileageRate"><MoneyInput id="mileageRate" name="mileageRate" defaultValue={centsToInput(s.mileageRateCents)} /></Field>
                 <Field label="Default deposit %" name="defaultDepositPct"><Input id="defaultDepositPct" name="defaultDepositPct" inputMode="decimal" defaultValue={s.defaultDepositPct} /></Field>
                 <Field label="Final count due (days before)" name="finalCountLeadDays"><Input id="finalCountLeadDays" name="finalCountLeadDays" type="number" min={0} defaultValue={s.finalCountLeadDays} /></Field>
+                <Field label="Default historical profit margin %" name="historicalMarginPct" hint="estimates profit for historical months" className="sm:col-span-2"><Input id="historicalMarginPct" name="historicalMarginPct" inputMode="decimal" defaultValue={s.historicalMarginPct} /></Field>
                 <Field label="Timezone" name="timezone" className="sm:col-span-2"><Input id="timezone" name="timezone" defaultValue={s.timezone} /></Field>
               </FormGrid>
             </ActionForm>

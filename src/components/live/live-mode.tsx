@@ -7,6 +7,8 @@ import { cn } from "@/lib/cn";
 import { formatTime, minutesOf, nowTimeIn } from "@/lib/domain/dates";
 import { STAFF_ROLE } from "@/lib/status";
 import { toggleRunLine } from "@/app/(app)/events/actions/prep";
+import type { StaffBriefSource } from "@/lib/staff-brief";
+import { ShareWithStaff } from "./share-with-staff";
 
 interface LiveData {
   id: string;
@@ -67,7 +69,7 @@ function fmtCountdown(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function LiveMode({ data }: { data: LiveData }) {
+export function LiveMode({ data, briefSource }: { data: LiveData; briefSource: StaffBriefSource }) {
   const now = useNow(data.timezone);
   const nowMin = minutesOf(now.time) ?? 0;
   const [run, setRun] = useState(data.run);
@@ -165,6 +167,7 @@ export function LiveMode({ data }: { data: LiveData }) {
               {data.guestCount} guests · service {formatTime(data.serviceTime)}{!data.isToday && " · not today (preview)"}
             </div>
           </div>
+          <ShareWithStaff eventId={data.id} source={briefSource} />
           <button type="button" onClick={toggleAwake} aria-label={awake ? "Screen stays on" : "Keep screen awake"} className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-2 text-xs font-medium", awake ? "bg-champagne-soft text-[#8a6a35]" : "text-ink-3 hover:bg-sand")}>
             <Sun className="h-4 w-4" /><span className="hidden sm:inline">{awake ? "Screen on" : "Keep awake"}</span>
           </button>

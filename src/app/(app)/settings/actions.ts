@@ -31,7 +31,9 @@ export async function saveBusinessSettings(_: ActionState, fd: FormData): Promis
       mileageRateCents: form.money(fd, "mileageRate") ?? 70,
       defaultDepositPct: form.num(fd, "defaultDepositPct") ?? 50,
       finalCountLeadDays: form.int(fd, "finalCountLeadDays") ?? 7,
+      historicalMarginPct: form.num(fd, "historicalMarginPct") ?? 70,
     };
+    if (data.historicalMarginPct < 0 || data.historicalMarginPct > 100) throw new FormError("Historical profit margin must be between 0% and 100%.");
     await db.businessSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
     refresh();
     return { ok: true, message: "Saved. Margins and recommendations across the app now use these rules." };

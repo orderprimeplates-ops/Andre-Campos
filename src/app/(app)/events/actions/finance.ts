@@ -78,3 +78,57 @@ export async function removePayment(id: string) {
   await db.payment.delete({ where: { id } });
   refresh();
 }
+
+// ─── Quick Food Cost ────────────────────────────────────────────────────────
+// What was actually spent on groceries, entered in seconds without recipes or shopping lists.
+// Stored as actual FOOD expenses, which the profit engine already treats as the actual food cost.
+
+const MAX_RECEIPT_BYTES = 2_500_000;
+
+/** The phone downsizes the photo and sends it as a data URL; decode and sanity-check it here. */
+function parseReceipt(fd: FormData): { mimeType: string; data: Uint8Array<ArrayBuffer> } | null {
+  const raw = form.str(fd, "receipt");
+  if (!raw) return null;
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(raw);
+  if (!m) throw new FormError("That receipt photo couldn’t be read — try another photo.");
+  const buf = Buffer.from(m[2], "base64");
+  if (buf.byteLength > MAX_RECEIPT_BYTES) throw new FormError("That receipt photo is too large.");
+  return { mimeType: m[1], data: new Uint8Array(buf) };
+}
+
+export async function saveFoodCost(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireUser();
+  return attempt(async () => {
+    const amountCents = form.money(fd, "amount");
+    if (amountCents === null || amountCents <= 0) throw new FormError("Enter what you spent.");
+    const vendor = form.str(fd, "vendor");
+    const data = {
+      amountCents,
+      vendor,
+      description: vendor ?? "Groceries",
+      date: form.date(fd, "date"),
+      notes: form.str(fd, "notes"),
+    };
+    const receipt = parseReceipt(fd);
+    const id = form.str(fd, "id");
+    if (id) {
+      await db.eventExpense.update({
+        where: { id, kind: "ACTUAL", category: "FOOD" },
+        data: {
+          ...data,
+          ...(receipt
+            ? { receipt: { upsert: { create: receipt, update: receipt } } }
+            : form.bool(fd, "removeReceipt")
+              ? { receipt: { delete: true } }
+              : {}),
+        },
+      });
+    } else {
+      await db.eventExpense.create({
+        data: { ...data, eventId: form.req(fd, "eventId"), kind: "ACTUAL", category: "FOOD", ...(receipt ? { receipt: { create: receipt } } : {}) },
+      });
+    }
+    refresh();
+    return { ok: true };
+  });
+}

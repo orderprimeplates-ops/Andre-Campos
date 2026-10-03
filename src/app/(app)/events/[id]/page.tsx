@@ -24,6 +24,7 @@ import { ShoppingTab } from "@/components/events/tabs/shopping";
 import { PrepTab } from "@/components/events/tabs/prep";
 import { EquipmentTab } from "@/components/events/tabs/equipment";
 import { FinancialsTab } from "@/components/events/tabs/financials";
+import { AddFoodCostButton } from "@/components/finance/food-cost";
 import { NotesTab } from "@/components/events/tabs/notes";
 import { deleteEvent, duplicateEvent, updateEventDetails } from "../actions/core";
 import { centsToInput } from "@/lib/domain/money";
@@ -41,10 +42,11 @@ type Tab = (typeof TABS)[number];
 export default async function EventPage({ params, searchParams }: PageProps<"/events/[id]">) {
   const [{ id }, sp, { today }] = await Promise.all([params, searchParams, getToday()]);
   const tab: Tab = TABS.includes(sp.tab as Tab) ? (sp.tab as Tab) : "overview";
-  const [ws, platforms, clients] = await Promise.all([
+  const [ws, platforms, clients, vendors] = await Promise.all([
     getEventWorkspace(id, today),
     db.platform.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     db.client.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.vendor.findMany({ orderBy: { sortOrder: "asc" }, select: { name: true } }),
   ]);
   if (!ws) notFound();
   const { event: e, summary: s } = ws;
@@ -89,6 +91,7 @@ export default async function EventPage({ params, searchParams }: PageProps<"/ev
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2 lg:flex-nowrap">
+            <AddFoodCostButton eventId={id} vendors={vendors.map((v) => v.name)} today={today} size="md" successHref={`/events/${id}?tab=financials#food-cost`} />
             <ButtonLink href={`/events/${id}/shop`} variant="secondary"><ShoppingBasket className="h-4 w-4" />Shop</ButtonLink>
             <ButtonLink href={`/events/${id}/live`} variant="wine"><ChefHat className="h-4 w-4" />Day-of mode</ButtonLink>
             <ActionDialog trigger={<Pencil className="h-4 w-4" />} triggerLabel="Edit event details" triggerSize="icon" title="Edit event details" action={updateEventDetails} hidden={{ id }} wide>

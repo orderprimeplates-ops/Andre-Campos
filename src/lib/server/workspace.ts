@@ -18,7 +18,7 @@ export const workspaceInclude = {
   prepTasks: { include: { recipe: { select: { id: true, name: true } }, dish: { select: { id: true, name: true } }, assignee: { select: { id: true, name: true } } }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
   runOfShow: { orderBy: [{ time: "asc" }, { sortOrder: "asc" }] },
   payments: { orderBy: { receivedOn: "asc" } },
-  expenses: { orderBy: { createdAt: "asc" } },
+  expenses: { orderBy: { createdAt: "asc" }, include: { receipt: { select: { id: true } } } },
   review: true,
   lead: { select: { id: true, name: true, source: true } },
 } satisfies Prisma.EventInclude;

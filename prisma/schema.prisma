@@ -50,17 +50,19 @@ model Session {
 }
 
 model BusinessSettings {
-  id                 Int      @id @default(1)
-  businessName       String   @default("Prime Plates")
-  ownerName          String   @default("Chef")
-  timezone           String   @default("America/New_York")
-  targetMarginPct    Float    @default(45)
-  minimumMarginPct   Float    @default(35)
-  targetFoodCostPct  Float    @default(28)
-  mileageRateCents   Int      @default(70)
-  defaultDepositPct  Float    @default(50)
-  finalCountLeadDays Int      @default(7)
-  updatedAt          DateTime @updatedAt
+  id                  Int      @id @default(1)
+  businessName        String   @default("Prime Plates")
+  ownerName           String   @default("Chef")
+  timezone            String   @default("America/New_York")
+  targetMarginPct     Float    @default(45)
+  minimumMarginPct    Float    @default(35)
+  targetFoodCostPct   Float    @default(28)
+  mileageRateCents    Int      @default(70)
+  defaultDepositPct   Float    @default(50)
+  finalCountLeadDays  Int      @default(7)
+  // Estimated margin for months entered as Historical Revenue (no detailed expenses on record).
+  historicalMarginPct Float    @default(70)
+  updatedAt           DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,6 +316,7 @@ model Event {
   dietarySummary      String?
   criticalNotes       String?
   internalNotes       String?
+  staffNotes          String? // setup & service notes shared on the Staff Event Brief
   duplicatedFromId    String?
   menu                Menu?
   guestNotes          GuestDietaryNote[]
@@ -408,9 +411,32 @@ model EventExpense {
   amountCents Int
   date        DateTime?       @db.Date
   notes       String?
+  receipt     ExpenseReceipt?
   createdAt   DateTime        @default(now())
 
   @@index([eventId, kind])
+}
+
+/// A photo of a receipt, downsized on the phone before upload and served only to signed-in users.
+model ExpenseReceipt {
+  id        String       @id @default(cuid())
+  expenseId String       @unique
+  expense   EventExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  mimeType  String
+  data      Bytes
+  createdAt DateTime     @default(now())
+}
+
+/// Money collected in a month before events were tracked individually in HQ ("opening financials").
+/// A month entered here replaces payment transactions for that month in revenue totals, so the same
+/// money can never be counted twice. Never linked to clients or events.
+model HistoricalRevenue {
+  id          String   @id @default(cuid())
+  month       DateTime @unique @db.Date // first day of the month
+  amountCents Int
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model EventReview {
@@ -518,7 +544,7 @@ model Ingredient {
   yieldPct          Float               @default(100)
   gramsPerMl        Float? // density, lets volume recipes cost weight-priced items
   gramsPerEach      Float? // lets "2 ea" onions cost a per-lb price
-  isPantryStaple    Boolean              @default(false) // usually on hand: listed as "check pantry", not "buy"
+  isPantryStaple    Boolean             @default(false) // usually on hand: listed as "check pantry", not "buy"
   preferredVendorId String?
   preferredVendor   Vendor?             @relation(fields: [preferredVendorId], references: [id], onDelete: SetNull)
   notes             String?
