@@ -95,3 +95,42 @@ describe("historical revenue", () => {
     expect(averageFoodCostPct([ev("2026-10-01", 200_000, 0, true, 50_000), ev("2026-10-02", 100_000, 0, false, null)])).toEqual({ pct: 25, events: 1 });
   });
 });
+
+describe("2026 opening financials (Feb–Sep)", () => {
+  const entries = [
+    ["2026-02", 1260775, 882543], ["2026-03", 1648746, 1154122], ["2026-04", 1345165, 941616], ["2026-05", 413450, 289415],
+    ["2026-06", 322336, 225635], ["2026-07", 1515961, 1061173], ["2026-08", 1188290, 831803], ["2026-09", 763084, 534159],
+  ] as const;
+  const historical = entries.map(([month, amountCents]) => ({ month, amountCents }));
+  const months = ["2026-01", ...entries.map(([m]) => m), "2026-10"];
+
+  it("matches the expected monthly estimated profit to the cent and reconciles every month", () => {
+    const rows = monthlyReport({ months, historical, payments: [], events: [], historicalMarginPct: 70 });
+    for (const [m, rev, profit] of entries) {
+      const r = rows.find((x) => x.month === m)!;
+      expect(r).toMatchObject({ source: "historical", collectedCents: rev, estimatedHistoricalProfitCents: profit, basis: "estimated" });
+      expect(r.estimatedHistoricalProfitCents + r.estimatedHistoricalExpensesCents).toBe(rev);
+    }
+    const t = sumReport(rows);
+    expect(t.collectedCents).toBe(8_457_807); // $84,578.07
+    expect(t.historicalCents).toBe(8_457_807);
+    expect(t.estimatedHistoricalProfitCents).toBe(5_920_466); // $59,204.66 (sum of per-month rounding; $59,204.65 on the total)
+    expect(t.estimatedHistoricalExpensesCents).toBe(2_537_341); // $25,373.41
+    expect(t.historicalThrough).toBe("2026-09");
+  });
+
+  it("leaves January blank (not $0) and keeps October on tracked payments only", () => {
+    const rows = monthlyReport({ months, historical, payments: [], events: [], historicalMarginPct: 70 });
+    expect(rows[0]).toMatchObject({ month: "2026-01", source: "none", collectedCents: 0 });
+    expect(rows.at(-1)).toMatchObject({ month: "2026-10", source: "none" });
+    const oct = monthlyReport({ months: ["2026-10"], historical, payments: [{ receivedOn: "2026-10-04", amountCents: 200_000 }], events: [], historicalMarginPct: 70 });
+    expect(oct[0]).toMatchObject({ source: "payments", collectedCents: 200_000 });
+  });
+
+  it("recalculates when the historical margin changes", () => {
+    const t = sumReport(monthlyReport({ months, historical, payments: [], events: [], historicalMarginPct: 65 }));
+    expect(t.estimatedHistoricalProfitCents + t.estimatedHistoricalExpensesCents).toBe(8_457_807);
+    expect(t.estimatedHistoricalProfitCents).toBeGreaterThan(Math.floor(8_457_807 * 0.65) - 8);
+    expect(t.estimatedHistoricalProfitCents).toBeLessThan(Math.ceil(8_457_807 * 0.65) + 8);
+  });
+});

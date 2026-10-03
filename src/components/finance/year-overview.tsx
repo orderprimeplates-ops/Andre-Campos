@@ -44,7 +44,7 @@ export function HistoricalRevenueDialog({ year, today, entries, marginPct }: { y
           );
         })}
       </div>
-      <Field label="Historical profit margin %" name="historicalMarginPct" hint="used to estimate profit for these months">
+      <Field label="Default Historical Profit Margin %" name="historicalMarginPct" hint="Estimated Profit = revenue × margin">
         <Input id="historicalMarginPct" name="historicalMarginPct" inputMode="decimal" defaultValue={marginPct} />
       </Field>
       <p className="rounded-xl bg-sand/60 px-3.5 py-2.5 text-xs text-ink-2">
@@ -75,24 +75,40 @@ export function YearOverview({
   const ytdRows = rows.filter((r) => r.month <= today.slice(0, 7));
   const histMonths = ytdRows.filter((r) => r.source === "historical");
 
+  const $ = (c: number) => formatMoney(c, { exact: true });
+  const trackedCents = totals.collectedCents - totals.historicalCents;
+  const estimatedProfit = totals.estimatedHistoricalProfitCents + totals.projectedProfitCents;
+  const estimatedShare = totals.profitCents > 0 ? (estimatedProfit / totals.profitCents) * 100 : null;
+  const histRange = histMonths.length ? `${monthName(histMonths[0].month, "short")}–${monthName(histMonths.at(-1)!.month, "short")} ${year}` : null;
+
   const tiles: { label: string; value: string; note?: string; estimate?: boolean }[] = [
     {
       label: `${year} YTD collected revenue`,
-      value: formatMoney(totals.collectedCents),
-      note: totals.historicalCents ? `incl. ${formatMoney(totals.historicalCents)} historical` : "payments received",
+      value: $(totals.collectedCents),
+      note: totals.historicalCents ? `${$(totals.historicalCents)} historical + ${$(trackedCents)} tracked payments` : "payments received",
     },
-    { label: "Revenue this month", value: formatMoney(thisMonth?.collectedCents ?? 0), note: thisMonth?.source === "historical" ? "historical entry" : formatDate.month(`${today.slice(0, 7)}-01`) },
+    { label: "Historical collected revenue", value: $(totals.historicalCents), note: histRange ? `${histRange} · not tied to clients or events` : "none entered yet" },
+    { label: "Revenue this month", value: $(thisMonth?.collectedCents ?? 0), note: thisMonth?.source === "historical" ? "historical entry" : `${formatDate.month(`${today.slice(0, 7)}-01`)} · payments posted so far` },
     { label: "Outstanding booked revenue", value: formatMoney(outstandingCents), note: `still to collect on ${outstandingEvents} event${outstandingEvents === 1 ? "" : "s"}` },
     { label: "Actual profit", value: formatMoney(totals.actualProfitCents), note: "events with recorded costs" },
-    { label: "Estimated historical profit", value: formatMoney(totals.estimatedHistoricalProfitCents), note: `${formatPct(historicalMarginPct)} of historical revenue`, estimate: true },
     {
-      label: `${year} YTD profit`,
+      label: "Estimated historical profit",
+      value: $(totals.estimatedHistoricalProfitCents),
+      note: `${formatPct(historicalMarginPct)} of historical revenue · Estimated Expenses ${$(totals.estimatedHistoricalExpensesCents)}`,
+      estimate: true,
+    },
+    {
+      label: `Combined ${year} YTD profit`,
       value: formatMoney(totals.profitCents),
-      note: totals.includesEstimates ? "actual + estimated" : "all actual",
+      note: `${formatPct(totals.marginPct, 1)} margin · ${totals.includesEstimates ? "includes estimated historical profit where detailed historical expenses are unavailable" : "all actual"}`,
       estimate: totals.includesEstimates,
     },
+    {
+      label: "Estimated vs. actual profit",
+      value: estimatedShare === null ? "—" : `${formatPct(100 - estimatedShare)} actual`,
+      note: `${formatMoney(totals.actualProfitCents)} actual · ${formatMoney(estimatedProfit)} estimated`,
+    },
     { label: "Average food cost", value: formatPct(foodCost.pct, 1), note: foodCost.events ? `across ${foodCost.events} event${foodCost.events === 1 ? "" : "s"} with actual food cost` : "add food cost to events" },
-    { label: "Profit margin", value: formatPct(totals.marginPct, 1), note: totals.includesEstimates ? "includes estimates" : "actual", estimate: totals.includesEstimates },
   ];
 
   return (
@@ -105,7 +121,7 @@ export function YearOverview({
         <HistoricalRevenueDialog year={year} today={today} entries={historicalEntries} marginPct={historicalMarginPct} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {tiles.map((t) => (
           <Card key={t.label} className="p-4 sm:p-5">
             <div className="flex items-center gap-1.5 text-[0.8125rem] text-ink-3">{t.label}{t.estimate && <Badge tone="amber" size="xs">est.</Badge>}</div>
@@ -121,9 +137,9 @@ export function YearOverview({
           <div className="space-y-1">
             {totals.includesEstimates && (
               <p>
-                <span className="font-medium text-ink">YTD profit includes estimated historical profit where detailed expenses are unavailable.</span>{" "}
-                {formatMoney(totals.actualProfitCents)} actual
-                {totals.estimatedHistoricalProfitCents ? ` + ${formatMoney(totals.estimatedHistoricalProfitCents)} estimated at ${formatPct(historicalMarginPct)} on historical revenue` : ""}
+                <span className="font-medium text-ink">Includes estimated historical profit where detailed historical expenses are unavailable.</span>{" "}
+                {formatMoney(totals.actualProfitCents)} actual profit
+                {totals.estimatedHistoricalProfitCents ? ` + ${$(totals.estimatedHistoricalProfitCents)} Estimated Profit (${formatPct(historicalMarginPct)} of historical revenue; Estimated Expenses ${$(totals.estimatedHistoricalExpensesCents)})` : ""}
                 {totals.projectedProfitCents ? ` + ${formatMoney(totals.projectedProfitCents)} projected for ${pendingEvents} past event${pendingEvents === 1 ? "" : "s"} with no costs entered yet` : ""}.
               </p>
             )}
@@ -138,15 +154,16 @@ export function YearOverview({
       )}
 
       <Card>
-        <CardHeader title={`${year} by month`} description="Collected revenue and profit. Each month says whether its profit is actual or estimated." />
+        <CardHeader title={`${year} by month`} description="Collected revenue, expenses and profit. Each month says whether its numbers are actual or estimated." />
         <CardBody>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="w-full min-w-[660px] text-sm">
               <thead className="text-xs text-ink-3">
                 <tr className="border-b border-line">
                   <th className="py-2 text-left font-medium">Month</th>
                   <th className="py-2 text-left font-medium">Revenue source</th>
                   <th className="py-2 text-right font-medium">Collected</th>
+                  <th className="py-2 text-right font-medium">Expenses</th>
                   <th className="py-2 text-right font-medium">Profit</th>
                   <th className="py-2 text-right font-medium">Margin</th>
                   <th className="py-2 text-right font-medium">Profit is</th>
@@ -155,12 +172,17 @@ export function YearOverview({
               <tbody className="divide-y divide-line/60">
                 {ytdRows.map((r) => {
                   const b = BASIS[r.basis];
+                  // Past months with nothing on record are unknown, not $0. The current month is being tracked.
+                  const blank = r.source === "none" && r.month < today.slice(0, 7);
+                  const est = r.basis === "estimated" ? "est." : r.basis === "mixed" ? "incl. est." : null;
+                  const tag = est && <span className="ml-1 text-[0.6875rem] font-normal text-amber">{est}</span>;
                   return (
                     <tr key={r.month} className={cn(r.month === today.slice(0, 7) && "font-medium")}>
                       <td className="py-2.5">{monthName(r.month)}</td>
-                      <td className="py-2.5 text-ink-2">{r.source === "historical" ? "Historical entry" : "Payments in HQ"}</td>
-                      <td className="py-2.5 text-right tabular">{formatMoney(r.collectedCents)}</td>
-                      <td className="py-2.5 text-right tabular">{r.basis === "none" ? "—" : formatMoney(r.profitCents)}</td>
+                      <td className="py-2.5 text-ink-2">{r.source === "historical" ? "Historical entry" : blank ? <span className="text-ink-4">Not entered</span> : "Payments in HQ"}</td>
+                      <td className="py-2.5 text-right tabular">{blank ? "—" : $(r.collectedCents)}</td>
+                      <td className="py-2.5 text-right tabular">{r.basis === "none" ? "—" : <>{$(r.profitRevenueCents - r.profitCents)}{tag}</>}</td>
+                      <td className="py-2.5 text-right tabular">{r.basis === "none" ? "—" : <>{$(r.profitCents)}{tag}</>}</td>
                       <td className="py-2.5 text-right tabular">{r.basis === "none" || !r.profitRevenueCents ? "—" : formatPct((r.profitCents / r.profitRevenueCents) * 100)}</td>
                       <td className="py-2.5 text-right">{r.basis === "none" ? <span className="text-ink-4">—</span> : <Badge tone={b.tone} size="xs">{b.label}</Badge>}</td>
                     </tr>
@@ -170,8 +192,9 @@ export function YearOverview({
               <tfoot>
                 <tr className="border-t border-line font-medium">
                   <td className="py-2.5" colSpan={2}>Year to date</td>
-                  <td className="py-2.5 text-right tabular">{formatMoney(totals.collectedCents)}</td>
-                  <td className="py-2.5 text-right tabular">{formatMoney(totals.profitCents)}</td>
+                  <td className="py-2.5 text-right tabular">{$(totals.collectedCents)}</td>
+                  <td className="py-2.5 text-right tabular">{$(totals.profitRevenueCents - totals.profitCents)}</td>
+                  <td className="py-2.5 text-right tabular">{$(totals.profitCents)}</td>
                   <td className="py-2.5 text-right tabular">{formatPct(totals.marginPct)}</td>
                   <td className="py-2.5 text-right">{totals.includesEstimates ? <Badge tone="amber" size="xs">incl. estimates</Badge> : <Badge tone="sage" size="xs">Actual</Badge>}</td>
                 </tr>
@@ -179,7 +202,8 @@ export function YearOverview({
             </table>
           </div>
           <p className="mt-3 text-xs text-ink-4">
-            Profit for a month comes from its events: actual where costs are recorded, projected where they aren’t yet. Historical months are estimated at {formatPct(historicalMarginPct)} except for events with recorded costs.
+            Historical months show Estimated Expenses and Estimated Profit at your {formatPct(historicalMarginPct)} Default Historical Profit Margin (change it in Historical revenue or Settings), except events with recorded costs, which keep their actual profit.
+            Tracked months use actual event costs, or projected costs for past events with nothing entered yet. “Not entered” months have no historical total and no payments in HQ.
           </p>
         </CardBody>
       </Card>

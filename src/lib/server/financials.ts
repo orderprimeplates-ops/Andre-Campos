@@ -48,7 +48,8 @@ export async function loadYearData(year: string, today: ISODate) {
   const [settings, historical, payments, past] = await Promise.all([
     getSettings(),
     db.historicalRevenue.findMany({ where: { month: { gte: fromISODate(from), lte: fromISODate(to) } }, orderBy: { month: "asc" } }),
-    db.payment.findMany({ where: { receivedOn: { gte: fromISODate(from), lte: fromISODate(to) }, kind: { not: "TIP" } }, select: { receivedOn: true, amountCents: true } }),
+    // Collected means already received: a payment dated in the future doesn't count until that day.
+    db.payment.findMany({ where: { receivedOn: { gte: fromISODate(from), lte: fromISODate(today < to ? today : to) }, kind: { not: "TIP" } }, select: { receivedOn: true, amountCents: true } }),
     // Only events that have happened carry profit; cancelled/unbooked never do.
     loadEventSummaries({ date: { gte: fromISODate(from), lte: fromISODate(today < to ? today : to) }, status: { in: ["BOOKED", "PLANNING", "READY", "COMPLETED"] } }, today),
   ]);

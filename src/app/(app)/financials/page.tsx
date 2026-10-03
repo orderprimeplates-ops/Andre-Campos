@@ -45,7 +45,8 @@ export default async function FinancialsPage({ searchParams }: PageProps<"/finan
   const year = today.slice(0, 4);
   const [events, payments, chartEvents, outstandingAll, yearData, historicalAll] = await Promise.all([
     loadEventSummaries({ date: { gte: fromISODate(from), lte: fromISODate(to) }, status: { notIn: ["CANCELLED", "INQUIRY"] } }, today),
-    db.payment.findMany({ where: { receivedOn: { gte: fromISODate(from), lte: fromISODate(to) }, kind: { not: "TIP" } }, select: { amountCents: true, receivedOn: true } }),
+    // Payments dated after today haven't posted yet, so they aren't "collected".
+    db.payment.findMany({ where: { receivedOn: { gte: fromISODate(from), lte: fromISODate(to < today ? to : today) }, kind: { not: "TIP" } }, select: { amountCents: true, receivedOn: true } }),
     loadEventSummaries({ date: { gte: fromISODate(chartFrom), lte: fromISODate(addDays(addMonths(startOfMonth(today), 6), -1)) }, status: { notIn: ["CANCELLED", "INQUIRY", "TENTATIVE"] } }, today),
     loadEventSummaries({ status: { notIn: ["CANCELLED", "INQUIRY", "TENTATIVE"] } }, today),
     loadYearData(year, today),

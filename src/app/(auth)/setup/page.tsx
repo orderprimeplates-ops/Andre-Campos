@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { db } from "@/lib/server/db";
 import { BrandMark } from "@/components/shell/brand";
 import { SetupForm } from "./setup-form";
@@ -7,6 +8,8 @@ export const metadata = { title: "Welcome" };
 
 /** Only reachable while the database has no accounts at all. */
 export default async function SetupPage() {
+  // Decide per request — never freeze "are there accounts yet?" into the build.
+  await connection();
   if ((await db.user.count()) > 0) redirect("/login");
   return (
     <div className="flex min-h-dvh items-center justify-center px-6 py-16">

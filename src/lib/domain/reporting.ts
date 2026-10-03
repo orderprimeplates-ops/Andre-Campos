@@ -43,12 +43,15 @@ export type ProfitBasis = "actual" | "estimated" | "mixed" | "none";
 
 export interface MonthRow {
   month: MonthKey;
-  source: "historical" | "payments";
+  /** "none" = no historical entry and nothing tracked: the month is blank/unknown, not $0. */
+  source: "historical" | "payments" | "none";
   collectedCents: number;
   /** Payments received in a historical month — shown for transparency, never added to revenue. */
   paymentsInHistoricalCents: number;
   actualProfitCents: number;
   estimatedHistoricalProfitCents: number;
+  /** The rest of the estimated part of a historical month: revenue × (100% − margin). Always an estimate. */
+  estimatedHistoricalExpensesCents: number;
   /** Past events with no actual costs entered yet, at their projected profit. */
   projectedProfitCents: number;
   profitCents: number;
@@ -58,6 +61,15 @@ export interface MonthRow {
 }
 
 export const monthOf = (d: ISODate): MonthKey => d.slice(0, 7);
+
+/**
+ * revenue × pct%, rounded half-up to the cent with integer math. (Multiplying by 0.7 in floating point
+ * turns $9,416.155 into $9,416.15 — this keeps it $9,416.16.)
+ */
+export function pctOfCents(cents: number, pct: number): number {
+  const scaled = Math.round(pct * 1000); // pct to 3 decimals, as an integer
+  return Math.round((cents * scaled) / 100_000);
+}
 
 function basisOf(actual: boolean, estimated: boolean): ProfitBasis {
   if (actual && estimated) return "mixed";
@@ -75,7 +87,6 @@ export function monthlyReport(input: {
   historicalMarginPct: number;
 }): MonthRow[] {
   const hist = new Map(input.historical.map((h) => [h.month, h.amountCents]));
-  const margin = input.historicalMarginPct / 100;
 
   return input.months.map((month) => {
     const payments = input.payments.filter((p) => monthOf(p.receivedOn) === month).reduce((s, p) => s + p.amountCents, 0);
@@ -90,7 +101,8 @@ export function monthlyReport(input: {
       const covered = Math.min(historicalCents, eventRevenue);
       // If those events add up to more than was collected that month, count their profit only in proportion.
       if (eventRevenue > historicalCents) actualProfitCents = Math.round((actualProfitCents * historicalCents) / eventRevenue);
-      const estimatedHistoricalProfitCents = Math.round((historicalCents - covered) * margin);
+      const estimatedRevenue = historicalCents - covered;
+      const estimatedHistoricalProfitCents = pctOfCents(estimatedRevenue, input.historicalMarginPct);
       return {
         month,
         source: "historical",
@@ -98,6 +110,8 @@ export function monthlyReport(input: {
         paymentsInHistoricalCents: payments,
         actualProfitCents,
         estimatedHistoricalProfitCents,
+        // Expenses = revenue − profit, so every month reconciles to the cent.
+        estimatedHistoricalExpensesCents: estimatedRevenue - estimatedHistoricalProfitCents,
         projectedProfitCents: 0,
         profitCents: actualProfitCents + estimatedHistoricalProfitCents,
         profitRevenueCents: historicalCents,
@@ -109,11 +123,12 @@ export function monthlyReport(input: {
     const projectedProfitCents = pending.reduce((s, e) => s + e.profitCents, 0);
     return {
       month,
-      source: "payments",
+      source: payments === 0 && events.length === 0 ? "none" : "payments",
       collectedCents: payments,
       paymentsInHistoricalCents: 0,
       actualProfitCents,
       estimatedHistoricalProfitCents: 0,
+      estimatedHistoricalExpensesCents: 0,
       projectedProfitCents,
       profitCents: actualProfitCents + projectedProfitCents,
       profitRevenueCents: events.reduce((s, e) => s + e.revenueCents, 0),
@@ -134,6 +149,7 @@ export function sumReport(rows: MonthRow[]) {
     paymentsInHistoricalCents: sum("paymentsInHistoricalCents"),
     actualProfitCents: sum("actualProfitCents"),
     estimatedHistoricalProfitCents,
+    estimatedHistoricalExpensesCents: sum("estimatedHistoricalExpensesCents"),
     projectedProfitCents,
     profitCents,
     profitRevenueCents,
