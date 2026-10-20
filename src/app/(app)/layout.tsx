@@ -3,6 +3,7 @@ import { db } from "@/lib/server/db";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileTabBar, MobileTopBar } from "@/components/shell/mobile-nav";
 import { SearchPalette } from "@/components/shell/search-palette";
+import { QuickAdd } from "@/components/shell/quick-add";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       </main>
       <MobileTabBar badges={badges} />
       <SearchPalette />
+      <QuickAdd />
     </div>
   );
 }

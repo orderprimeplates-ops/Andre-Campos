@@ -32,6 +32,8 @@ export async function saveBusinessSettings(_: ActionState, fd: FormData): Promis
       defaultDepositPct: form.num(fd, "defaultDepositPct") ?? 50,
       finalCountLeadDays: form.int(fd, "finalCountLeadDays") ?? 7,
       historicalMarginPct: form.num(fd, "historicalMarginPct") ?? 70,
+      ownerHourlyRateCents: Math.max(0, form.money(fd, "ownerHourlyRate") ?? 0),
+      overheadPerEventCents: Math.max(0, form.money(fd, "overheadPerEvent") ?? 0),
     };
     if (data.historicalMarginPct < 0 || data.historicalMarginPct > 100) throw new FormError("Historical profit margin must be between 0% and 100%.");
     await db.businessSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });

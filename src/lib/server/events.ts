@@ -16,7 +16,7 @@ export const eventSummaryInclude = {
   platform: true,
   menu: { include: menuInclude },
   staffAssignments: { select: { id: true, staffMemberId: true, status: true, role: true, rateCents: true, rateType: true, callTime: true, endTime: true, actualPayCents: true } },
-  payments: { select: { kind: true, amountCents: true } },
+  payments: { select: { kind: true, amountCents: true, salesTaxCents: true } },
   expenses: { where: { kind: "PROJECTED" }, select: { category: true, amountCents: true } },
   prepTasks: { select: { status: true } },
   equipment: { select: { status: true } },
@@ -26,7 +26,7 @@ export type EventWithSummaryData = Prisma.EventGetPayload<{ include: typeof even
 
 export function summarizeEvent(
   e: EventWithSummaryData,
-  settings: { targetMarginPct: number; minimumMarginPct: number; mileageRateCents: number },
+  settings: { targetMarginPct: number; minimumMarginPct: number; mileageRateCents: number; ownerHourlyRateCents?: number; overheadPerEventCents?: number },
   today: ISODate,
 ) {
   const date = toISODate(e.date);
@@ -39,12 +39,13 @@ export function summarizeEvent(
     foodCostCents: food.cents,
     laborCents,
     roundTripMiles: e.roundTripMiles,
+    ownerHours: e.ownerHours,
     expenses: e.expenses as ExpenseInput[],
     platform: e.platform,
     settings,
   });
   const payment = paymentSummary(
-    { priceCents: e.priceCents, depositCents: e.depositCents, balanceDueDate: isoOrNull(e.balanceDueDate), date },
+    { priceCents: e.priceCents, depositCents: e.depositCents, salesTaxCents: e.salesTaxCents, balanceDueDate: isoOrNull(e.balanceDueDate), date },
     e.payments,
     today,
   );

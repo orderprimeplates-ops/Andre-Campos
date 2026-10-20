@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, CalendarRange, CircleDollarSign, Inbox, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, CircleDollarSign, Inbox, LineChart, Plus, Sparkles, TrendingUp } from "lucide-react";
 import { getCurrentUser } from "@/lib/server/auth";
 import { getDashboard } from "@/lib/server/dashboard";
+import { getYearSummary } from "@/lib/server/financials";
+import { RevenueTrend } from "@/components/dashboard/revenue-trend";
 import { getCalendarItems } from "@/lib/server/calendar";
 import { getSettings, getToday } from "@/lib/server/settings";
 import { addMonths, formatDate, minutesOf, monthGrid, startOfMonth } from "@/lib/domain/dates";
@@ -13,7 +15,7 @@ import { EventCard } from "@/components/events/event-card";
 import { MonthCalendar } from "@/components/calendar/month-calendar";
 import { EmptyState } from "@/components/ui/misc";
 
-export const metadata = { title: "Dashboard" };
+export const metadata = { title: "Home" };
 
 function greeting(time: string) {
   const m = minutesOf(time) ?? 720;
@@ -26,7 +28,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
   const [{ today, now }, settings, user, sp] = await Promise.all([getToday(), getSettings(), getCurrentUser(), searchParams]);
   const monthParam = typeof sp.month === "string" && /^\d{4}-\d{2}$/.test(sp.month) ? `${sp.month}-01` : startOfMonth(today);
   const grid = monthGrid(monthParam);
-  const [data, calendarItems] = await Promise.all([getDashboard(today), getCalendarItems(grid[0], grid[grid.length - 1], today)]);
+  const [data, calendarItems, ys] = await Promise.all([getDashboard(today), getCalendarItems(grid[0], grid[grid.length - 1], today), getYearSummary(today)]);
   const s = data.snapshot;
   const name = settings.ownerName || user?.name || "Chef";
   const urgent = data.attention.filter((a) => a.priority === "urgent").length;
@@ -37,23 +39,26 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
     urgent ? `${urgent} thing${urgent > 1 ? "s" : ""} need${urgent > 1 ? "" : "s"} you today` : "nothing urgent",
   ].join(" · ");
 
+  const t = ys.totals;
+  const estimated = t.estimatedHistoricalProfitCents + t.projectedProfitCents;
+  // Money first. Every tile opens the records behind it.
   const tiles = [
     {
-      label: "Upcoming revenue", value: formatMoney(s.upcomingRevenueCents), href: "/financials", icon: CircleDollarSign,
-      note: `Next 30 days · ${formatMoney(s.upcomingProfitCents)} projected profit`,
+      label: "Revenue this month", value: formatMoney(ys.thisMonth?.collectedCents ?? 0), href: `/money?tab=bookkeeping&month=${today.slice(0, 7)}`, icon: CircleDollarSign,
+      note: `${formatDate.month(startOfMonth(today))} · payments received`,
     },
     {
-      label: "Outstanding balances", value: formatMoney(s.outstandingCents), href: "/financials#outstanding", icon: CircleDollarSign,
+      label: `${ys.year} revenue`, value: formatMoney(t.collectedCents), href: "/money", icon: LineChart,
+      note: t.historicalCents ? `incl. ${formatMoney(t.historicalCents)} historical` : "year to date",
+    },
+    {
+      label: `${ys.year} profit`, value: formatMoney(t.profitCents), href: "/money", icon: TrendingUp, estimate: t.includesEstimates,
+      note: t.includesEstimates ? `${formatMoney(t.actualProfitCents)} actual · ${formatMoney(estimated)} estimated` : "all actual",
+    },
+    {
+      label: "Owed to you", value: formatMoney(s.outstandingCents), href: "/money#outstanding", icon: CircleDollarSign,
       note: s.overdueCents > 0 ? `${formatMoney(s.overdueCents)} overdue` : `Across ${s.outstandingCount} event${s.outstandingCount === 1 ? "" : "s"}`,
       alert: s.overdueCents > 0,
-    },
-    {
-      label: "Upcoming events", value: String(s.next30Count), href: "/events", icon: CalendarRange,
-      note: `${s.next30Guests} guests in the next 30 days`,
-    },
-    {
-      label: "Active leads", value: String(s.activeLeads), href: "/leads", icon: Inbox,
-      note: `${formatMoney(s.pipelineCents)} in pipeline${s.newLeads ? ` · ${s.newLeads} new` : ""}`,
     },
   ];
 
@@ -82,7 +87,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
             className="group animate-fade-up rounded-[var(--radius-card)] border border-line/70 bg-linen p-4 shadow-[var(--shadow-card)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] sm:p-5"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[0.75rem] font-medium text-ink-3 sm:text-[0.8125rem]">{t.label}</span>
+              <span className="flex items-center gap-1.5 text-[0.75rem] font-medium text-ink-3 sm:text-[0.8125rem]">{t.label}{"estimate" in t && t.estimate && <span className="rounded-full bg-amber-soft px-1.5 text-[0.625rem] font-semibold text-amber">est.</span>}</span>
               <t.icon className="h-4 w-4 text-ink-4 transition-colors group-hover:text-wine" strokeWidth={1.75} />
             </div>
             <div className="mt-2 font-display text-[1.9rem] leading-none tabular text-ink sm:text-[2.35rem]">{t.value}</div>
@@ -93,9 +98,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
 
       <section className="grid gap-6 xl:grid-cols-12 xl:gap-8">
         <Card className="min-w-0 xl:col-span-5">
-          <CardHeader eyebrow="Today" title="Needs attention" />
+          <CardHeader eyebrow="Today" title="Needs your attention" />
           <CardBody className="pt-3">
-            <AttentionList items={data.attention} />
+            <AttentionList items={data.attention} initial={3} />
           </CardBody>
         </Card>
         <Card className="min-w-0 xl:col-span-7">
@@ -118,6 +123,10 @@ export default async function DashboardPage({ searchParams }: PageProps<"/">) {
           </CardBody>
         </Card>
       </section>
+
+      <Card className="p-5 sm:p-6">
+        <RevenueTrend rows={ys.rows} year={ys.year} />
+      </Card>
 
       <section>
         <div className="mb-4 flex items-end justify-between">

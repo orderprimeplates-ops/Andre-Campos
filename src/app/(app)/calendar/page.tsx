@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EventsClientsTabs } from "@/components/shell/section-tabs";
 import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/server/db";
 import { getToday } from "@/lib/server/settings";
@@ -71,6 +72,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
 
   return (
     <div>
+      <EventsClientsTabs active="calendar" />
       <PageHeader
         eyebrow="Schedule"
         title="Calendar"

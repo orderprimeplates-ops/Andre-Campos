@@ -86,6 +86,8 @@ export async function updateEventDetails(_: ActionState, fd: FormData): Promise<
         platformId: form.str(fd, "platformId"),
         priceCents: form.money(fd, "price") ?? 0,
         depositCents: form.money(fd, "deposit") ?? 0,
+        salesTaxCents: Math.max(0, form.money(fd, "salesTax") ?? 0),
+        ownerHours: form.num(fd, "ownerHours"),
         depositDueDate: form.date(fd, "depositDueDate"),
         balanceDueDate: form.date(fd, "balanceDueDate"),
         shoppingDate: form.date(fd, "shoppingDate"),
@@ -138,6 +140,11 @@ export async function updateEventNotes(_: ActionState, fd: FormData): Promise<Ac
 
 export async function deleteEvent(id: string) {
   await requireUser();
+  // Financial history must never disappear with an event: payments, expenses and receipts stay.
+  const money = await db.event.findUnique({ where: { id }, select: { _count: { select: { payments: true, expenses: { where: { kind: "ACTUAL" } } } } } });
+  if (money && money._count.payments + money._count.expenses > 0) {
+    redirect(`/events/${id}?blocked=delete`);
+  }
   await db.lead.updateMany({ where: { eventId: id }, data: { eventId: null } });
   await db.event.delete({ where: { id } });
   refresh();

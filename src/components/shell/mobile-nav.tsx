@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LogOut, Menu, Search, X } from "lucide-react";
+import { LogOut, Menu, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { MOBILE_TABS, NAV_GROUPS, SETTINGS_ITEM, isActive } from "./nav-config";
 import { BrandMark } from "./brand";
 import { openSearch } from "./search-palette";
+import { openQuickAdd } from "./quick-add";
+import type { NavItem } from "./nav-config";
 
 export function MobileTopBar() {
   return (
@@ -26,23 +28,30 @@ export function MobileTopBar() {
 export function MobileTabBar({ badges }: { badges: Record<string, number> }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const inMore = !MOBILE_TABS.some((t) => isActive(pathname, t.href));
+  const inMore = !MOBILE_TABS.some((t) => isActive(pathname, t.href, t.match));
+  const tab = (t: NavItem) => {
+    const active = isActive(pathname, t.href, t.match);
+    const Icon = t.icon;
+    return (
+      <Link key={t.href} href={t.href} className="relative flex flex-col items-center gap-1 pb-1 pt-2.5">
+        <Icon className={cn("h-[22px] w-[22px]", active ? "text-wine" : "text-ink-3")} strokeWidth={active ? 2 : 1.6} />
+        <span className={cn("text-[0.625rem] font-medium", active ? "text-ink" : "text-ink-3")}>{t.label}</span>
+        {!!(badges[t.href] || t.match?.some((m) => badges[m])) && <span className="absolute right-[26%] top-1.5 h-2 w-2 rounded-full bg-wine ring-2 ring-linen" />}
+      </Link>
+    );
+  };
 
   return (
     <>
       <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line/70 bg-linen/90 pb-safe backdrop-blur-xl lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5">
-          {MOBILE_TABS.map((t) => {
-            const active = isActive(pathname, t.href);
-            const Icon = t.icon;
-            return (
-              <Link key={t.href} href={t.href} className="relative flex flex-col items-center gap-1 pb-1 pt-2.5">
-                <Icon className={cn("h-[22px] w-[22px]", active ? "text-wine" : "text-ink-3")} strokeWidth={active ? 2 : 1.6} />
-                <span className={cn("text-[0.625rem] font-medium", active ? "text-ink" : "text-ink-3")}>{t.label}</span>
-                {!!badges[t.href] && <span className="absolute right-[26%] top-1.5 h-2 w-2 rounded-full bg-wine ring-2 ring-linen" />}
-              </Link>
-            );
-          })}
+          {MOBILE_TABS.slice(0, 2).map(tab)}
+          <div className="flex items-start justify-center pt-1.5">
+            <button type="button" onClick={openQuickAdd} aria-label="Add" className="flex h-12 w-12 items-center justify-center rounded-full bg-espresso text-linen shadow-[var(--shadow-lift)] active:scale-95">
+              <Plus className="h-6 w-6" strokeWidth={2.2} />
+            </button>
+          </div>
+          {MOBILE_TABS.slice(2).map(tab)}
           <button type="button" onClick={() => setMoreOpen(true)} className="flex flex-col items-center gap-1 pb-1 pt-2.5">
             <Menu className={cn("h-[22px] w-[22px]", inMore ? "text-wine" : "text-ink-3")} strokeWidth={inMore ? 2 : 1.6} />
             <span className={cn("text-[0.625rem] font-medium", inMore ? "text-ink" : "text-ink-3")}>More</span>
@@ -67,7 +76,7 @@ export function MobileTabBar({ badges }: { badges: Record<string, number> }) {
                 <div className="grid grid-cols-3 gap-2">
                   {g.items.map((item) => {
                     const Icon = item.icon;
-                    const active = isActive(pathname, item.href);
+                    const active = isActive(pathname, item.href, item.match);
                     return (
                       <Link
                         key={item.href}

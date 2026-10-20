@@ -1,4 +1,5 @@
 import { Plus, Sparkles } from "lucide-react";
+import { EventsClientsTabs } from "@/components/shell/section-tabs";
 import { getToday } from "@/lib/server/settings";
 import { loadEventSummaries } from "@/lib/server/events";
 import { fromISODate, formatDate } from "@/lib/domain/dates";
@@ -31,6 +32,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/events">)
 
   return (
     <div>
+      <EventsClientsTabs active="events" />
       <PageHeader
         eyebrow="Bookings"
         title="Events"

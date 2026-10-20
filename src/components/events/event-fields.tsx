@@ -8,7 +8,7 @@ interface EventLike {
   arrivalTime?: string | null; serviceTime?: string | null; endTime?: string | null; guestCount?: number;
   guestCountConfirmed?: boolean; finalCountDueDate?: Date | null; platformId?: string | null; priceCents?: number;
   depositCents?: number; depositDueDate?: Date | null; balanceDueDate?: Date | null; shoppingDate?: Date | null;
-  prepStartDate?: Date | null; roundTripMiles?: number | null; description?: string | null;
+  prepStartDate?: Date | null; roundTripMiles?: number | null; description?: string | null; salesTaxCents?: number; ownerHours?: number | null;
 }
 
 const d = (v?: Date | null) => (v ? toISODate(v) : "");
@@ -70,8 +70,10 @@ export function EventDetailsFields({ e, platforms }: { e: EventLike; platforms: 
         <div className="eyebrow">Money</div>
         <FormGrid className="sm:grid-cols-3">
           <Field label="Client price" name="price"><MoneyInput id="price" name="price" defaultValue={centsToInput(e.priceCents)} /></Field>
+          <Field label="Sales tax charged" name="salesTax" hint="on top of the price"><MoneyInput id="salesTax" name="salesTax" placeholder="0" defaultValue={e.salesTaxCents ? centsToInput(e.salesTaxCents) : ""} /></Field>
           <Field label="Deposit" name="deposit"><MoneyInput id="deposit" name="deposit" defaultValue={centsToInput(e.depositCents)} /></Field>
           <Field label="Round-trip miles" name="roundTripMiles"><Input id="roundTripMiles" name="roundTripMiles" inputMode="decimal" defaultValue={e.roundTripMiles ?? ""} /></Field>
+          <Field label="Your hours" name="ownerHours" hint="optional"><Input id="ownerHours" name="ownerHours" inputMode="decimal" placeholder="e.g. 8" defaultValue={e.ownerHours ?? ""} /></Field>
           <Field label="Deposit due" name="depositDueDate"><Input id="depositDueDate" name="depositDueDate" type="date" defaultValue={d(e.depositDueDate)} /></Field>
           <Field label="Balance due" name="balanceDueDate"><Input id="balanceDueDate" name="balanceDueDate" type="date" defaultValue={d(e.balanceDueDate)} /></Field>
         </FormGrid>

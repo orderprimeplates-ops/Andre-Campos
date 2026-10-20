@@ -48,6 +48,10 @@ export interface MonthRow {
   collectedCents: number;
   /** Payments received in a historical month — shown for transparency, never added to revenue. */
   paymentsInHistoricalCents: number;
+  /** Business expenses not tied to an event, recorded this month. */
+  generalExpensesCents: number;
+  /** Of those, the part in a historical month: kept on record, not applied (the estimate covers costs). */
+  generalExpensesNotAppliedCents: number;
   actualProfitCents: number;
   estimatedHistoricalProfitCents: number;
   /** The rest of the estimated part of a historical month: revenue × (100% − margin). Always an estimate. */
@@ -85,6 +89,8 @@ export function monthlyReport(input: {
   /** Past, non-cancelled events. */
   events: ReportEvent[];
   historicalMarginPct: number;
+  /** Actual expenses with no event (insurance, software…). They reduce profit in tracked months. */
+  generalExpenses?: { date: ISODate; amountCents: number }[];
 }): MonthRow[] {
   const hist = new Map(input.historical.map((h) => [h.month, h.amountCents]));
 
@@ -93,6 +99,7 @@ export function monthlyReport(input: {
     const events = input.events.filter((e) => monthOf(e.date) === month);
     const withActuals = events.filter((e) => e.hasActualCosts);
     const historicalCents = hist.get(month);
+    const generalExpensesCents = (input.generalExpenses ?? []).filter((x) => monthOf(x.date) === month).reduce((s, x) => s + x.amountCents, 0);
     let actualProfitCents = withActuals.reduce((s, e) => s + e.profitCents, 0);
 
     if (historicalCents !== undefined) {
@@ -108,6 +115,8 @@ export function monthlyReport(input: {
         source: "historical",
         collectedCents: historicalCents,
         paymentsInHistoricalCents: payments,
+        generalExpensesCents,
+        generalExpensesNotAppliedCents: generalExpensesCents,
         actualProfitCents,
         estimatedHistoricalProfitCents,
         // Expenses = revenue − profit, so every month reconciles to the cent.
@@ -121,18 +130,21 @@ export function monthlyReport(input: {
 
     const pending = events.filter((e) => !e.hasActualCosts);
     const projectedProfitCents = pending.reduce((s, e) => s + e.profitCents, 0);
+    actualProfitCents -= generalExpensesCents;
     return {
       month,
-      source: payments === 0 && events.length === 0 ? "none" : "payments",
+      source: payments === 0 && events.length === 0 && generalExpensesCents === 0 ? "none" : "payments",
       collectedCents: payments,
       paymentsInHistoricalCents: 0,
+      generalExpensesCents,
+      generalExpensesNotAppliedCents: 0,
       actualProfitCents,
       estimatedHistoricalProfitCents: 0,
       estimatedHistoricalExpensesCents: 0,
       projectedProfitCents,
       profitCents: actualProfitCents + projectedProfitCents,
       profitRevenueCents: events.reduce((s, e) => s + e.revenueCents, 0),
-      basis: basisOf(withActuals.length > 0, pending.length > 0),
+      basis: basisOf(withActuals.length > 0 || generalExpensesCents > 0, pending.length > 0),
     };
   });
 }
@@ -147,6 +159,8 @@ export function sumReport(rows: MonthRow[]) {
     collectedCents: sum("collectedCents"),
     historicalCents: rows.filter((r) => r.source === "historical").reduce((s, r) => s + r.collectedCents, 0),
     paymentsInHistoricalCents: sum("paymentsInHistoricalCents"),
+    generalExpensesCents: sum("generalExpensesCents"),
+    generalExpensesNotAppliedCents: sum("generalExpensesNotAppliedCents"),
     actualProfitCents: sum("actualProfitCents"),
     estimatedHistoricalProfitCents,
     estimatedHistoricalExpensesCents: sum("estimatedHistoricalExpensesCents"),

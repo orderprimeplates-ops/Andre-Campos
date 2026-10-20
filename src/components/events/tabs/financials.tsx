@@ -2,9 +2,9 @@ import { Plus } from "lucide-react";
 import type { getEventWorkspace } from "@/lib/server/workspace";
 import { db } from "@/lib/server/db";
 import { getEventShopping } from "@/lib/server/shopping";
-import { actualEvent, mileageCost, type ExpenseInput } from "@/lib/domain/finance";
+import { actualEvent, mileageCost, ownerCosts, salesTaxPortion, type ExpenseInput } from "@/lib/domain/finance";
 import { formatDate, toISODate, type ISODate } from "@/lib/domain/dates";
-import { formatMoney, formatPct } from "@/lib/domain/money";
+import { centsToInput, formatMoney, formatPct } from "@/lib/domain/money";
 import { EXPENSE_CATEGORY, PAYMENT_STATUS, metaOf } from "@/lib/status";
 import { cn } from "@/lib/cn";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { Field, FormGrid, Input, MoneyInput, Select } from "@/components/ui/fiel
 import { RemoveButton } from "@/components/ui/remove-button";
 import { PriceTester } from "@/components/finance/price-tester";
 import { FoodCostCard } from "@/components/finance/food-cost";
+import { EventProfit, type EventProfitView } from "@/components/finance/event-profit";
 import { addExpense, addPayment, removeExpense, removePayment } from "@/app/(app)/events/actions/finance";
 
 type WS = NonNullable<Awaited<ReturnType<typeof getEventWorkspace>>>;
@@ -56,8 +57,9 @@ export async function FinancialsTab({ ws, today }: { ws: WS; today: ISODate }) {
   const foodLines = actualLines.filter((x) => x.category === "FOOD");
   const otherActualLines = actualLines.filter((x) => x.category !== "FOOD");
   const pay = metaOf(PAYMENT_STATUS, s.payment.status);
+  const own = ownerCosts(e.ownerHours, settings);
   const actual = actualEvent({
-    collectedCents: s.payment.collectedCents,
+    collectedCents: s.payment.revenueCents, // excludes tips and sales tax
     priceCents: e.priceCents,
     estimatedFoodCents: s.foodCost.cents,
     guestCount: e.guestCount,
@@ -65,6 +67,8 @@ export async function FinancialsTab({ ws, today }: { ws: WS; today: ISODate }) {
     shoppingActualCents: shopping.totals.actualCents,
     assignments: e.staffAssignments,
     platform: e.platform,
+    ownerLaborCents: own.ownerLaborCents,
+    overheadCents: own.overheadCents,
   });
   const past = toISODate(e.date) < today;
   const hasActuals = actualLines.length > 0 || shopping.totals.actualCents > 0 || e.staffAssignments.some((a) => a.status === "PAID" || a.status === "COMPLETED");
@@ -78,61 +82,31 @@ export async function FinancialsTab({ ws, today }: { ws: WS; today: ISODate }) {
     ["Margin", p.marginPct, actual.marginPct, "pct", true],
   ];
 
+  // Before the event (and with nothing real recorded) it's an estimate; afterwards it's actual,
+  // with anything still filled in from estimates named.
+  const estimatedParts = [
+    ...(actual.foodSource === "estimate" ? ["food (menu estimate)"] : []),
+    ...(actual.laborSource === "projected" ? ["staff (scheduled, not yet marked worked)"] : []),
+  ];
+  const profitView: EventProfitView = showActual
+    ? { basis: estimatedParts.length ? "mixed" : "actual", revenueCents: actual.revenueCents, costs: actual.costs, totalCostCents: actual.totalCostCents, profitCents: actual.profitCents, marginPct: actual.marginPct, estimatedParts }
+    : { basis: "estimated", revenueCents: p.revenueCents, costs: p.costs, totalCostCents: p.totalCostCents, profitCents: p.profitCents, marginPct: p.marginPct, estimatedParts: [] };
+
   return (
     <div className="space-y-6">
+      <EventProfit v={profitView} />
+
       <FoodCostCard
         eventId={e.id}
         entries={foodLines}
         estimatedFoodCents={s.foodCost.cents}
         actual={actual}
-        collectedCents={s.payment.collectedCents}
+        collectedCents={s.payment.revenueCents}
         vendors={vendors.map((v) => v.name)}
         today={today}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
-        <Card className="min-w-0">
-          <CardHeader eyebrow="Pricing" title="Price & margin" description="Try prices freely — nothing changes until you choose to use one." />
-          <CardBody>
-            <PriceTester
-              eventId={e.id}
-              priceCents={e.priceCents}
-              guestCount={e.guestCount}
-              foodCostCents={s.foodCost.cents}
-              laborCents={s.laborCents}
-              roundTripMiles={e.roundTripMiles}
-              expenses={projectedLines.map((x) => ({ category: x.category, amountCents: x.amountCents })) as ExpenseInput[]}
-              platforms={platforms.map((pl) => ({ id: pl.id, name: pl.name, commissionPct: pl.commissionPct, fixedFeeCents: pl.fixedFeeCents, processingPct: pl.processingPct, processingFixedCents: pl.processingFixedCents }))}
-              platformId={e.platformId}
-              settings={{ targetMarginPct: settings.targetMarginPct, minimumMarginPct: settings.minimumMarginPct, mileageRateCents: settings.mileageRateCents }}
-            />
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader title="Projected costs" action={<ExpenseDialog eventId={e.id} kind="PROJECTED" label="Cost" />} />
-          <CardBody>
-            <ul className="space-y-2 text-sm">
-              <li className="flex justify-between"><span className="text-ink-2">Food <span className="text-xs text-ink-4">from menu</span></span><span className="tabular">{formatMoney(s.foodCost.cents)}</span></li>
-              <li className="flex justify-between"><span className="text-ink-2">Event labor <span className="text-xs text-ink-4">from staff</span></span><span className="tabular">{formatMoney(s.laborCents)}</span></li>
-              {e.roundTripMiles ? (
-                <li className="flex justify-between"><span className="text-ink-2">Mileage <span className="text-xs text-ink-4">{e.roundTripMiles} mi × {formatMoney(settings.mileageRateCents, { exact: true })}</span></span><span className="tabular">{formatMoney(mileageCost(e.roundTripMiles, settings.mileageRateCents))}</span></li>
-              ) : null}
-              {projectedLines.map((x) => (
-                <li key={x.id} className="group flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-ink-2">{EXPENSE_CATEGORY[x.category]} <span className="text-xs text-ink-4">{x.description}</span></span>
-                  <span className="flex items-center gap-1 tabular">{formatMoney(x.amountCents)}<RemoveButton action={removeExpense.bind(null, x.id)} label="Remove" className="p-1 opacity-0 group-hover:opacity-100" /></span>
-                </li>
-              ))}
-              {p.costs.filter((c) => c.category === "PLATFORM" || c.category === "PROCESSING").map((c) => (
-                <li key={c.category} className="flex justify-between"><span className="text-ink-2">{c.label} <span className="text-xs text-ink-4">{e.platform?.name}</span></span><span className="tabular">{formatMoney(c.cents)}</span></li>
-              ))}
-              <li className="flex justify-between border-t border-line pt-2 font-medium"><span>Total</span><span className="tabular">{formatMoney(p.totalCostCents)}</span></li>
-            </ul>
-          </CardBody>
-        </Card>
-      </div>
-
+      <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader
@@ -149,16 +123,18 @@ export async function FinancialsTab({ ws, today }: { ws: WS; today: ISODate }) {
                   <Field label="Amount" name="amount"><MoneyInput id="amount" name="amount" required defaultValue={String((s.payment.depositOutstandingCents || s.payment.balanceCents) / 100)} /></Field>
                   <Field label="Received" name="receivedOn"><Input id="receivedOn" name="receivedOn" type="date" required defaultValue={today} /></Field>
                   <Field label="Method" name="method"><Input id="method" name="method" placeholder="Zelle, check, card…" list="pay-methods" /></Field>
+                  <Field label="Sales tax included" name="salesTax" hint={e.salesTaxCents ? "this event’s share" : "if any"}><MoneyInput id="salesTax" name="salesTax" placeholder="0" defaultValue={e.salesTaxCents ? centsToInput(salesTaxPortion(s.payment.depositOutstandingCents || s.payment.balanceCents, e)) : ""} /></Field>
                 </FormGrid>
+                <label className="flex items-center gap-2 text-xs text-ink-3"><input type="checkbox" name="allowDuplicate" className="h-3.5 w-3.5 accent-[var(--color-wine)]" />This is a separate payment (same amount and date as one already recorded)</label>
                 <datalist id="pay-methods">{["Zelle", "Venmo", "Check", "Card", "Cash", "ACH", "Platform"].map((m) => <option key={m} value={m} />)}</datalist>
               </ActionDialog>
             }
           />
           <CardBody className="space-y-4">
             <div>
-              <ProgressBar value={e.priceCents ? (s.payment.collectedCents / e.priceCents) * 100 : 0} className="h-2" />
+              <ProgressBar value={s.payment.totalDueCents ? (s.payment.collectedCents / s.payment.totalDueCents) * 100 : 0} className="h-2" />
               <div className="mt-2 flex justify-between text-sm">
-                <span><strong className="font-medium tabular">{formatMoney(s.payment.collectedCents)}</strong> <span className="text-ink-3">of {formatMoney(e.priceCents)}</span></span>
+                <span><strong className="font-medium tabular">{formatMoney(s.payment.collectedCents)}</strong> <span className="text-ink-3">of {formatMoney(s.payment.totalDueCents)}{e.salesTaxCents ? " incl. sales tax" : ""}</span></span>
                 <span className={cn(s.payment.balanceCents > 0 && past ? "text-clay" : "text-ink-2")}><strong className="font-medium tabular">{formatMoney(s.payment.balanceCents)}</strong> remaining</span>
               </div>
               <div className="mt-1 text-xs text-ink-3">
@@ -203,7 +179,53 @@ export async function FinancialsTab({ ws, today }: { ws: WS; today: ISODate }) {
           </CardBody>
         </Card>
       </div>
+      </div>
 
+      <details className="group min-w-0 sm:rounded-[var(--radius-card)] sm:border sm:border-line/70 sm:bg-linen/60 sm:p-5">
+        <summary className="cursor-pointer rounded-2xl border border-line/70 bg-linen/60 px-4 py-3 font-display text-[1.2rem] sm:border-0 sm:bg-transparent sm:p-0">Cost details & pricing tools <span className="font-sans text-sm text-ink-3">— price tester, projected costs, projected vs actual</span></summary>
+        <div className="mt-5 space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
+        <Card className="min-w-0">
+          <CardHeader eyebrow="Pricing" title="Price & margin" description="Try prices freely — nothing changes until you choose to use one." />
+          <CardBody>
+            <PriceTester
+              eventId={e.id}
+              priceCents={e.priceCents}
+              guestCount={e.guestCount}
+              foodCostCents={s.foodCost.cents}
+              laborCents={s.laborCents}
+              roundTripMiles={e.roundTripMiles}
+              expenses={projectedLines.map((x) => ({ category: x.category, amountCents: x.amountCents })) as ExpenseInput[]}
+              platforms={platforms.map((pl) => ({ id: pl.id, name: pl.name, commissionPct: pl.commissionPct, fixedFeeCents: pl.fixedFeeCents, processingPct: pl.processingPct, processingFixedCents: pl.processingFixedCents }))}
+              platformId={e.platformId}
+              settings={{ targetMarginPct: settings.targetMarginPct, minimumMarginPct: settings.minimumMarginPct, mileageRateCents: settings.mileageRateCents }}
+            />
+          </CardBody>
+        </Card>
+
+        <Card className="min-w-0">
+          <CardHeader title="Projected costs" action={<ExpenseDialog eventId={e.id} kind="PROJECTED" label="Cost" />} />
+          <CardBody>
+            <ul className="space-y-2 text-sm">
+              <li className="flex justify-between"><span className="text-ink-2">Food <span className="text-xs text-ink-4">from menu</span></span><span className="tabular">{formatMoney(s.foodCost.cents)}</span></li>
+              <li className="flex justify-between"><span className="text-ink-2">Event labor <span className="text-xs text-ink-4">from staff</span></span><span className="tabular">{formatMoney(s.laborCents)}</span></li>
+              {e.roundTripMiles ? (
+                <li className="flex justify-between"><span className="text-ink-2">Mileage <span className="text-xs text-ink-4">{e.roundTripMiles} mi × {formatMoney(settings.mileageRateCents, { exact: true })}</span></span><span className="tabular">{formatMoney(mileageCost(e.roundTripMiles, settings.mileageRateCents))}</span></li>
+              ) : null}
+              {projectedLines.map((x) => (
+                <li key={x.id} className="group flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-ink-2">{EXPENSE_CATEGORY[x.category]} <span className="text-xs text-ink-4">{x.description}</span></span>
+                  <span className="flex items-center gap-1 tabular">{formatMoney(x.amountCents)}<RemoveButton action={removeExpense.bind(null, x.id)} label="Remove" className="p-1 opacity-0 group-hover:opacity-100" /></span>
+                </li>
+              ))}
+              {p.costs.filter((c) => c.category === "PLATFORM" || c.category === "PROCESSING").map((c) => (
+                <li key={c.category} className="flex justify-between"><span className="text-ink-2">{c.label} <span className="text-xs text-ink-4">{e.platform?.name}</span></span><span className="tabular">{formatMoney(c.cents)}</span></li>
+              ))}
+              <li className="flex justify-between border-t border-line pt-2 font-medium"><span>Total</span><span className="tabular">{formatMoney(p.totalCostCents)}</span></li>
+            </ul>
+          </CardBody>
+        </Card>
+      </div>
       <Card>
         <CardHeader eyebrow="Analysis" title="Projected vs actual" description={!showActual ? "Fills in after the event, as you record receipts, shopping prices, staff pay and payments." : undefined} />
         <CardBody>
@@ -243,6 +265,8 @@ export async function FinancialsTab({ ws, today }: { ws: WS; today: ISODate }) {
           )}
         </CardBody>
       </Card>
+        </div>
+      </details>
     </div>
   );
 }

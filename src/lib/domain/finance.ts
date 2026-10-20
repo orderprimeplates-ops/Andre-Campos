@@ -84,6 +84,13 @@ export type CostCategory =
   | "EQUIPMENT"
   | "DISPOSABLES"
   | "OTHER"
+  | "KITCHEN_RENTAL"
+  | "MARKETING"
+  | "SOFTWARE"
+  | "INSURANCE"
+  | "PROFESSIONAL"
+  | "OWNER_LABOR"
+  | "OVERHEAD"
   | "PLATFORM"
   | "PROCESSING";
 
@@ -98,12 +105,19 @@ export const COST_LABELS: Record<CostCategory, string> = {
   EQUIPMENT: "Equipment",
   DISPOSABLES: "Disposables",
   OTHER: "Other",
+  KITCHEN_RENTAL: "Kitchen rental",
+  MARKETING: "Marketing",
+  SOFTWARE: "Software",
+  INSURANCE: "Insurance",
+  PROFESSIONAL: "Professional services",
+  OWNER_LABOR: "Your time",
+  OVERHEAD: "Allocated overhead",
   PLATFORM: "Platform commission",
   PROCESSING: "Payment processing",
 };
 
 export interface ExpenseInput {
-  category: Exclude<CostCategory, "PLATFORM" | "PROCESSING">;
+  category: Exclude<CostCategory, "PLATFORM" | "PROCESSING" | "OWNER_LABOR" | "OVERHEAD">;
   amountCents: number;
 }
 
@@ -111,6 +125,16 @@ export interface ProfitSettings {
   targetMarginPct: number;
   minimumMarginPct: number;
   mileageRateCents: number;
+  /** Optional: cost your own hours on events (0 = off). */
+  ownerHourlyRateCents?: number;
+  /** Optional: a share of fixed business costs per event (0 = off). */
+  overheadPerEventCents?: number;
+}
+
+/** Optional owner-time and overhead costs. Both are 0 unless you set them in Settings. */
+export function ownerCosts(ownerHours: number | null | undefined, settings: Pick<ProfitSettings, "ownerHourlyRateCents" | "overheadPerEventCents">) {
+  const ownerLaborCents = ownerHours && ownerHours > 0 ? Math.round(ownerHours * (settings.ownerHourlyRateCents ?? 0)) : 0;
+  return { ownerLaborCents, overheadCents: settings.overheadPerEventCents ?? 0 };
 }
 
 export interface ProjectionInput {
@@ -119,6 +143,7 @@ export interface ProjectionInput {
   foodCostCents: number;
   laborCents: number;
   roundTripMiles?: number | null;
+  ownerHours?: number | null;
   expenses: ExpenseInput[]; // projected lines entered by hand
   platform?: PlatformFees | null;
   settings: ProfitSettings;
@@ -175,6 +200,9 @@ export function projectEvent(input: ProjectionInput): ProfitSummary & {
   addCost(costs, "LABOR", input.laborCents);
   addCost(costs, "MILEAGE", mileageCost(input.roundTripMiles, input.settings.mileageRateCents));
   for (const e of input.expenses) addCost(costs, e.category, e.amountCents);
+  const own = ownerCosts(input.ownerHours, input.settings);
+  addCost(costs, "OWNER_LABOR", own.ownerLaborCents);
+  addCost(costs, "OVERHEAD", own.overheadCents);
 
   const fixedCosts = [...costs.values()].reduce((s, c) => s + c, 0);
   const fees = platformFees(input.priceCents, input.platform);
@@ -208,7 +236,7 @@ export function priceForMargin(fixedCostCents: number, marginPct: number, platfo
 // ─── Actuals ────────────────────────────────────────────────────────────────
 
 export interface ActualInput {
-  collectedCents: number; // payments received, excluding tips
+  collectedCents: number; // payments received, excluding tips and sales tax
   /** The booked client price. Event revenue is the larger of this and what was collected. */
   priceCents?: number;
   guestCount: number;
@@ -219,6 +247,9 @@ export interface ActualInput {
   estimatedFoodCents?: number;
   assignments: AssignmentInput[];
   platform?: PlatformFees | null;
+  /** Optional owner time / overhead (see ownerCosts). */
+  ownerLaborCents?: number;
+  overheadCents?: number;
 }
 
 export type LaborSource = "actual" | "projected" | "none";
@@ -252,11 +283,22 @@ export function actualEvent(input: ActualInput): ProfitSummary & {
     addCost(costs, "FOOD", input.estimatedFoodCents!);
   }
   for (const e of input.actualExpenses) addCost(costs, e.category, e.amountCents);
-  // Until any shift is marked worked or paid, staff cost is the scheduled cost — never silently $0.
+  // Staff cost: labor entered as expenses (e.g. through + Add) wins, so it's never counted twice.
+  // Otherwise worked/paid shifts, otherwise the scheduled cost — never silently $0.
+  const laborExpenses = input.actualExpenses.some((e) => e.category === "LABOR" || e.category === "PREP_LABOR");
   const workedLabor = actualLabor(input.assignments);
   const scheduledLabor = projectedLabor(input.assignments);
-  const laborSource: LaborSource = workedLabor > 0 ? "actual" : scheduledLabor > 0 ? "projected" : "none";
-  addCost(costs, "LABOR", workedLabor > 0 ? workedLabor : scheduledLabor);
+  let laborSource: LaborSource = "none";
+  if (laborExpenses) laborSource = "actual";
+  else if (workedLabor > 0) {
+    laborSource = "actual";
+    addCost(costs, "LABOR", workedLabor);
+  } else if (scheduledLabor > 0) {
+    laborSource = "projected";
+    addCost(costs, "LABOR", scheduledLabor);
+  }
+  addCost(costs, "OWNER_LABOR", input.ownerLaborCents ?? 0);
+  addCost(costs, "OVERHEAD", input.overheadCents ?? 0);
   const price = input.priceCents ?? 0;
   const revenueBasis = input.collectedCents >= price ? "collected" : "booked";
   const revenueCents = Math.max(input.collectedCents, price);
@@ -280,16 +322,26 @@ export type PaymentStatus = "DEPOSIT_DUE" | "DEPOSIT_PAID" | "BALANCE_DUE" | "PA
 export interface PaymentInput {
   kind: "DEPOSIT" | "BALANCE" | "TIP" | "OTHER";
   amountCents: number;
+  /** Sales tax included in amountCents (default 0). */
+  salesTaxCents?: number;
 }
 
+/**
+ * The client owes price + sales tax charged. Payments (excluding tips) pay that down.
+ * Revenue is what was collected minus the sales tax inside it — sales tax belongs to the state.
+ */
 export function paymentSummary(
-  event: { priceCents: number; depositCents: number; balanceDueDate?: ISODate | null; date: ISODate },
+  event: { priceCents: number; depositCents: number; salesTaxCents?: number; balanceDueDate?: ISODate | null; date: ISODate },
   payments: PaymentInput[],
   today: ISODate,
 ) {
-  const collectedCents = payments.filter((p) => p.kind !== "TIP").reduce((s, p) => s + p.amountCents, 0);
+  const nonTip = payments.filter((p) => p.kind !== "TIP");
+  const collectedCents = nonTip.reduce((s, p) => s + p.amountCents, 0);
+  const salesTaxCollectedCents = nonTip.reduce((s, p) => s + (p.salesTaxCents ?? 0), 0);
+  const revenueCents = collectedCents - salesTaxCollectedCents;
   const tipsCents = payments.filter((p) => p.kind === "TIP").reduce((s, p) => s + p.amountCents, 0);
-  const balanceCents = Math.max(0, event.priceCents - collectedCents);
+  const totalDueCents = event.priceCents + (event.salesTaxCents ?? 0);
+  const balanceCents = Math.max(0, totalDueCents - collectedCents);
   const depositOutstandingCents = Math.max(0, event.depositCents - collectedCents);
 
   let status: PaymentStatus;
@@ -300,5 +352,12 @@ export function paymentSummary(
     const due = event.balanceDueDate ?? event.date;
     status = daysBetween(today, due) <= 7 ? "BALANCE_DUE" : "DEPOSIT_PAID";
   }
-  return { collectedCents, tipsCents, balanceCents, depositOutstandingCents, status };
+  return { collectedCents, salesTaxCollectedCents, revenueCents, totalDueCents, tipsCents, balanceCents, depositOutstandingCents, status };
+}
+
+/** Sales tax share of a payment, proportional to the tax on the booking. */
+export function salesTaxPortion(amountCents: number, event: { priceCents: number; salesTaxCents?: number }) {
+  const tax = event.salesTaxCents ?? 0;
+  const total = event.priceCents + tax;
+  return total > 0 && tax > 0 ? Math.round((amountCents * tax) / total) : 0;
 }

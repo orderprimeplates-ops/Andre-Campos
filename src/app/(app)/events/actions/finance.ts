@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/server/db";
 import { requireUser } from "@/lib/server/auth";
 import { attempt, form, FormError, type ActionState } from "@/lib/server/forms";
+import { parseReceipt } from "@/lib/server/receipts";
 import { ExpenseCategory, ExpenseKind, PaymentKind } from "@/generated/prisma/enums";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -58,11 +59,21 @@ export async function addPayment(_: ActionState, fd: FormData): Promise<ActionSt
     if (!amountCents || amountCents <= 0) throw new FormError("Enter the amount received.");
     const receivedOn = form.date(fd, "receivedOn");
     if (!receivedOn) throw new FormError("When was it received?");
+    const eventId = form.req(fd, "eventId", "Event");
+    const kind = form.enumOf(fd, "kind", PaymentKind) ?? "OTHER";
+    const salesTaxCents = kind === "TIP" ? 0 : Math.max(0, form.money(fd, "salesTax") ?? 0);
+    if (salesTaxCents > amountCents) throw new FormError("The sales tax can’t be more than the payment.");
+    // The same amount on the same day for the same event is almost always a double entry.
+    const dup = await db.payment.findFirst({ where: { eventId, amountCents, receivedOn }, select: { id: true } });
+    if (dup && !form.bool(fd, "allowDuplicate")) {
+      throw new FormError("This exact payment (same event, amount and date) is already recorded. If it really is a second payment, tick “This is a separate payment” and save again.");
+    }
     await db.payment.create({
       data: {
-        eventId: form.req(fd, "eventId"),
-        kind: form.enumOf(fd, "kind", PaymentKind) ?? "OTHER",
+        eventId,
+        kind,
         amountCents,
+        salesTaxCents,
         receivedOn,
         method: form.str(fd, "method"),
         notes: form.str(fd, "notes"),
@@ -83,18 +94,6 @@ export async function removePayment(id: string) {
 // What was actually spent on groceries, entered in seconds without recipes or shopping lists.
 // Stored as actual FOOD expenses, which the profit engine already treats as the actual food cost.
 
-const MAX_RECEIPT_BYTES = 2_500_000;
-
-/** The phone downsizes the photo and sends it as a data URL; decode and sanity-check it here. */
-function parseReceipt(fd: FormData): { mimeType: string; data: Uint8Array<ArrayBuffer> } | null {
-  const raw = form.str(fd, "receipt");
-  if (!raw) return null;
-  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(raw);
-  if (!m) throw new FormError("That receipt photo couldn’t be read — try another photo.");
-  const buf = Buffer.from(m[2], "base64");
-  if (buf.byteLength > MAX_RECEIPT_BYTES) throw new FormError("That receipt photo is too large.");
-  return { mimeType: m[1], data: new Uint8Array(buf) };
-}
 
 export async function saveFoodCost(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireUser();

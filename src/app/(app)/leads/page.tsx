@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EventsClientsTabs } from "@/components/shell/section-tabs";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/server/db";
 import { getToday } from "@/lib/server/settings";
@@ -32,6 +33,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
 
   return (
     <div>
+      <EventsClientsTabs active="leads" />
       <PageHeader
         eyebrow="Sales"
         title="Leads"

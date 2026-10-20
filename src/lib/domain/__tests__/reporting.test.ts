@@ -134,3 +134,16 @@ describe("2026 opening financials (Feb–Sep)", () => {
     expect(t.estimatedHistoricalProfitCents).toBeLessThan(Math.ceil(8_457_807 * 0.65) + 8);
   });
 });
+
+describe("general business expenses (no event)", () => {
+  const historical = [{ month: "2026-09", amountCents: 763084 }];
+  it("reduce actual profit in tracked months, and never touch the historical estimate", () => {
+    const rows = monthlyReport({
+      months: ["2026-09", "2026-10"], historical, payments: [{ receivedOn: "2026-10-05", amountCents: 200000 }],
+      events: [], historicalMarginPct: 70,
+      generalExpenses: [{ date: "2026-09-15", amountCents: 12000 }, { date: "2026-10-02", amountCents: 9900 }],
+    });
+    expect(rows[0]).toMatchObject({ estimatedHistoricalProfitCents: 534159, generalExpensesNotAppliedCents: 12000, basis: "estimated" });
+    expect(rows[1]).toMatchObject({ actualProfitCents: -9900, profitCents: -9900, basis: "actual", generalExpensesCents: 9900 });
+  });
+});

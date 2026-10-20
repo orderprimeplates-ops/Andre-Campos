@@ -50,19 +50,22 @@ model Session {
 }
 
 model BusinessSettings {
-  id                  Int      @id @default(1)
-  businessName        String   @default("Prime Plates")
-  ownerName           String   @default("Chef")
-  timezone            String   @default("America/New_York")
-  targetMarginPct     Float    @default(45)
-  minimumMarginPct    Float    @default(35)
-  targetFoodCostPct   Float    @default(28)
-  mileageRateCents    Int      @default(70)
-  defaultDepositPct   Float    @default(50)
-  finalCountLeadDays  Int      @default(7)
+  id                    Int      @id @default(1)
+  businessName          String   @default("Prime Plates")
+  ownerName             String   @default("Chef")
+  timezone              String   @default("America/New_York")
+  targetMarginPct       Float    @default(45)
+  minimumMarginPct      Float    @default(35)
+  targetFoodCostPct     Float    @default(28)
+  mileageRateCents      Int      @default(70)
+  defaultDepositPct     Float    @default(50)
+  finalCountLeadDays    Int      @default(7)
   // Estimated margin for months entered as Historical Revenue (no detailed expenses on record).
-  historicalMarginPct Float    @default(70)
-  updatedAt           DateTime @updatedAt
+  historicalMarginPct   Float    @default(70)
+  // Optional costs for event contribution profit. 0 = not used (no change to profit).
+  ownerHourlyRateCents  Int      @default(0)
+  overheadPerEventCents Int      @default(0)
+  updatedAt             DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -317,6 +320,8 @@ model Event {
   criticalNotes       String?
   internalNotes       String?
   staffNotes          String? // setup & service notes shared on the Staff Event Brief
+  salesTaxCents       Int                 @default(0) // sales tax charged to the client on top of the price
+  ownerHours          Float? // optional: your own hours, costed at the owner hourly rate
   duplicatedFromId    String?
   menu                Menu?
   guestNotes          GuestDietaryNote[]
@@ -369,15 +374,17 @@ enum PaymentKind {
 }
 
 model Payment {
-  id          String      @id @default(cuid())
-  eventId     String
-  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  kind        PaymentKind
-  amountCents Int
-  receivedOn  DateTime    @db.Date
-  method      String?
-  notes       String?
-  createdAt   DateTime    @default(now())
+  id            String      @id @default(cuid())
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind          PaymentKind
+  amountCents   Int
+  /// Portion of amountCents that is sales tax collected for the state — never revenue.
+  salesTaxCents Int         @default(0)
+  receivedOn    DateTime    @db.Date
+  method        String?
+  notes         String?
+  createdAt     DateTime    @default(now())
 
   @@index([eventId])
 }
@@ -398,23 +405,31 @@ enum ExpenseCategory {
   EQUIPMENT
   DISPOSABLES
   OTHER
+  KITCHEN_RENTAL
+  MARKETING
+  SOFTWARE
+  INSURANCE
+  PROFESSIONAL
 }
 
 model EventExpense {
-  id          String          @id @default(cuid())
-  eventId     String
-  event       Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  kind        ExpenseKind
-  category    ExpenseCategory
-  description String
-  vendor      String?
-  amountCents Int
-  date        DateTime?       @db.Date
-  notes       String?
-  receipt     ExpenseReceipt?
-  createdAt   DateTime        @default(now())
+  id            String          @id @default(cuid())
+  /// Optional: an expense can belong to an event, or be a general business expense.
+  eventId       String?
+  event         Event?          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  kind          ExpenseKind
+  category      ExpenseCategory
+  description   String
+  vendor        String?
+  amountCents   Int
+  date          DateTime?       @db.Date
+  notes         String?
+  paymentMethod String?
+  receipt       ExpenseReceipt?
+  createdAt     DateTime        @default(now())
 
   @@index([eventId, kind])
+  @@index([date])
 }
 
 /// A photo of a receipt, downsized on the phone before upload and served only to signed-in users.

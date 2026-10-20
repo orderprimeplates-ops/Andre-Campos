@@ -144,7 +144,13 @@ export default async function EventPage({ params, searchParams }: PageProps<"/ev
       </div>
 
       <div className="mt-12 flex justify-end border-t border-line pt-5">
-        <ConfirmButton action={deleteEvent.bind(null, id)} label="Delete event" confirmLabel="Delete event & everything in it" icon={<Trash2 className="h-4 w-4" />} />
+        {e.payments.length > 0 || e.expenses.some((x) => x.kind === "ACTUAL") ? (
+          <p className={cn("max-w-md text-right text-xs", sp.blocked === "delete" ? "text-clay" : "text-ink-4")}>
+            This event has payments or expenses, so it can’t be deleted — your financial records stay intact. To take it off the books, set its status to <strong className="font-medium">Cancelled</strong>.
+          </p>
+        ) : (
+          <ConfirmButton action={deleteEvent.bind(null, id)} label="Delete event" confirmLabel="Delete event & everything in it" icon={<Trash2 className="h-4 w-4" />} />
+        )}
       </div>
     </div>
   );

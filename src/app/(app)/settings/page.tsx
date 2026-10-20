@@ -1,6 +1,8 @@
-import { Pencil, Plus } from "lucide-react";
+import { Download, Pencil, Plus, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/server/db";
 import { getSettings } from "@/lib/server/settings";
+import { getCurrentUser } from "@/lib/server/auth";
+import { backupSummary } from "@/lib/server/backup";
 import { centsToInput, formatMoney } from "@/lib/domain/money";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -30,10 +32,12 @@ function PlatformFields({ p }: { p?: P }) {
 }
 
 export default async function SettingsPage() {
-  const [s, platforms, vendors] = await Promise.all([
+  const [s, platforms, vendors, user, backup] = await Promise.all([
     getSettings(),
     db.platform.findMany({ orderBy: { sortOrder: "asc" }, include: { _count: { select: { events: true } } } }),
     db.vendor.findMany({ orderBy: { sortOrder: "asc" }, include: { _count: { select: { ingredients: true } } } }),
+    getCurrentUser(),
+    backupSummary(),
   ]);
   return (
     <div className="space-y-6">
@@ -52,6 +56,8 @@ export default async function SettingsPage() {
                 <Field label="Mileage rate per mile" name="mileageRate"><MoneyInput id="mileageRate" name="mileageRate" defaultValue={centsToInput(s.mileageRateCents)} /></Field>
                 <Field label="Default deposit %" name="defaultDepositPct"><Input id="defaultDepositPct" name="defaultDepositPct" inputMode="decimal" defaultValue={s.defaultDepositPct} /></Field>
                 <Field label="Final count due (days before)" name="finalCountLeadDays"><Input id="finalCountLeadDays" name="finalCountLeadDays" type="number" min={0} defaultValue={s.finalCountLeadDays} /></Field>
+                <Field label="Your hourly rate" name="ownerHourlyRate" hint="optional · costs your hours on events"><MoneyInput id="ownerHourlyRate" name="ownerHourlyRate" placeholder="0" defaultValue={s.ownerHourlyRateCents ? centsToInput(s.ownerHourlyRateCents) : ""} /></Field>
+                <Field label="Overhead per event" name="overheadPerEvent" hint="optional · share of fixed costs"><MoneyInput id="overheadPerEvent" name="overheadPerEvent" placeholder="0" defaultValue={s.overheadPerEventCents ? centsToInput(s.overheadPerEventCents) : ""} /></Field>
                 <Field label="Default Historical Profit Margin %" name="historicalMarginPct" hint="estimates profit for historical months" className="sm:col-span-2"><Input id="historicalMarginPct" name="historicalMarginPct" inputMode="decimal" defaultValue={s.historicalMarginPct} /></Field>
                 <Field label="Timezone" name="timezone" className="sm:col-span-2"><Input id="timezone" name="timezone" defaultValue={s.timezone} /></Field>
               </FormGrid>
@@ -100,6 +106,26 @@ export default async function SettingsPage() {
               </div>
             </CardBody>
           </Card>
+
+          {user?.role === "OWNER" && (
+            <Card>
+              <CardHeader title="Backup" description="Download a complete copy of everything in HQ — clients, events, payments, recipes, settings and receipts. Keep it somewhere safe." />
+              <CardBody className="space-y-3">
+                <a href="/backup" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-espresso px-4 text-sm font-medium text-linen hover:bg-ink"><Download className="h-4 w-4" />Download full backup</a>
+                {backup.receiptParts > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs text-ink-3">Receipt photos ({backup.receipts}) — download {backup.receiptParts === 1 ? "this file" : `all ${backup.receiptParts} files`} too:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from({ length: backup.receiptParts }, (_, i) => (
+                        <a key={i} href={`/backup/receipts?part=${i + 1}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong/70 px-3 text-sm text-ink-2 hover:bg-sand"><Download className="h-3.5 w-3.5" />Receipts {i + 1} of {backup.receiptParts}</a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="flex items-start gap-1.5 text-xs text-ink-3"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sage" />The file contains private client and financial details — store it like a bank statement. Restoring it needs a technical hand (see docs/BACKUP.md).</p>
+              </CardBody>
+            </Card>
+          )}
 
           <Card>
             <CardHeader title="Your password" />

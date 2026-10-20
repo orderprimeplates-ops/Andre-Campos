@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Search } from "lucide-react";
+import { LogOut, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { NAV_GROUPS, SETTINGS_ITEM, isActive, type NavItem } from "./nav-config";
 import { Wordmark } from "./brand";
 import { openSearch } from "./search-palette";
+import { openQuickAdd } from "./quick-add";
 
 function NavLink({ item, pathname, badge }: { item: NavItem; pathname: string; badge?: number }) {
-  const active = isActive(pathname, item.href);
+  const active = isActive(pathname, item.href, item.match);
   const Icon = item.icon;
   return (
     <Link
@@ -38,7 +39,10 @@ export function Sidebar({ userName, badges }: { userName: string; badges: Record
           <Wordmark />
         </Link>
       </div>
-      <div className="px-4 pb-3">
+      <div className="space-y-2 px-4 pb-3">
+        <button type="button" onClick={openQuickAdd} className="flex w-full items-center justify-center gap-2 rounded-xl bg-espresso px-3 py-2.5 text-[0.875rem] font-medium text-linen shadow-[var(--shadow-card)] transition-colors hover:bg-ink">
+          <Plus className="h-4 w-4" strokeWidth={2.2} />Add
+        </button>
         <button
           type="button"
           onClick={openSearch}

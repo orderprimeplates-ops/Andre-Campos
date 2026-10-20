@@ -165,9 +165,17 @@ export const DIETARY_SEVERITY: Record<string, Meta> = {
 };
 
 export const EXPENSE_CATEGORY: Record<string, string> = {
-  FOOD: "Food", BEVERAGE: "Beverage", LABOR: "Event labor", PREP_LABOR: "Shopping & prep labor", TRAVEL: "Travel",
-  MILEAGE: "Mileage", RENTALS: "Rentals", EQUIPMENT: "Equipment", DISPOSABLES: "Disposables", OTHER: "Other",
+  FOOD: "Food & groceries", BEVERAGE: "Beverage", LABOR: "Staffing & labor", PREP_LABOR: "Shopping & prep labor", TRAVEL: "Travel",
+  MILEAGE: "Mileage", RENTALS: "Event rentals", EQUIPMENT: "Equipment", DISPOSABLES: "Event supplies", OTHER: "Other business expense",
+  KITCHEN_RENTAL: "Kitchen rental", MARKETING: "Marketing & advertising", SOFTWARE: "Software & subscriptions",
+  INSURANCE: "Insurance", PROFESSIONAL: "Professional services",
 };
+
+/** The order categories are offered in when adding an expense. */
+export const EXPENSE_CATEGORY_ORDER = [
+  "FOOD", "LABOR", "KITCHEN_RENTAL", "EQUIPMENT", "DISPOSABLES", "TRAVEL", "MILEAGE", "MARKETING", "SOFTWARE",
+  "INSURANCE", "PROFESSIONAL", "RENTALS", "BEVERAGE", "PREP_LABOR", "OTHER",
+] as const;
 
 export const SPACE_LEVEL: Record<string, string> = { NONE: "None", LIMITED: "Limited", MODERATE: "Moderate", AMPLE: "Ample" };
 export const AVAILABILITY: Record<string, string> = { NONE: "None — bring our own", PARTIAL: "Partial", FULL: "Full set" };
